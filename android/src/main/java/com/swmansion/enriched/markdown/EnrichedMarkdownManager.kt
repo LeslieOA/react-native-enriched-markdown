@@ -123,6 +123,15 @@ class EnrichedMarkdownManager :
     // No-op on Android — only used on iOS
   }
 
+  @ReactProp(name = "streamingAnimation", defaultBoolean = false)
+  override fun setStreamingAnimation(
+    view: EnrichedMarkdown?,
+    streamingAnimation: Boolean,
+  ) {
+    // TODO: Add streaming animation support for github flavor.
+    // Currently only supported with flavor="commonmark" (single TextView).
+  }
+
   override fun setPadding(
     view: EnrichedMarkdown,
     left: Int,

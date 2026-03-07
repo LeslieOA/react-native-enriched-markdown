@@ -16,6 +16,7 @@ import com.swmansion.enriched.markdown.parser.Md4cFlags
 import com.swmansion.enriched.markdown.parser.Parser
 import com.swmansion.enriched.markdown.renderer.Renderer
 import com.swmansion.enriched.markdown.styles.StyleConfig
+import com.swmansion.enriched.markdown.utils.text.TailFadeInAnimator
 import com.swmansion.enriched.markdown.utils.text.interaction.CheckboxTouchHelper
 import com.swmansion.enriched.markdown.utils.text.view.LinkLongPressMovementMethod
 import com.swmansion.enriched.markdown.utils.text.view.applySelectableState
@@ -65,6 +66,10 @@ class EnrichedMarkdownText
     private var allowFontScaling: Boolean = true
     private var maxFontSizeMultiplier: Float = 0f
     private var allowTrailingMargin: Boolean = false
+
+    private var streamingAnimation: Boolean = false
+    private var previousTextLength: Int = 0
+    private var fadeAnimator: TailFadeInAnimator? = null
 
     init {
       setupAsMarkdownTextView(accessibilityHelper)
@@ -130,6 +135,18 @@ class EnrichedMarkdownText
       scheduleRenderIfNeeded()
     }
 
+    fun setStreamingAnimation(enabled: Boolean) {
+      if (streamingAnimation == enabled) return
+      streamingAnimation = enabled
+      if (enabled) {
+        previousTextLength = text?.length ?: 0
+      } else {
+        fadeAnimator?.cancelAll()
+        fadeAnimator = null
+        previousTextLength = 0
+      }
+    }
+
     private fun updateMeasurementStoreFontScaling() {
       MeasurementStore.updateFontScalingSettings(id, allowFontScaling, maxFontSizeMultiplier)
     }
@@ -189,22 +206,28 @@ class EnrichedMarkdownText
     }
 
     private fun applyRenderedText(styledText: CharSequence) {
+      val tailStart = previousTextLength
+
       text = styledText
 
-      // setText on a selectable TextView can reset movementMethod, so re-apply if needed
       if (movementMethod !is LinkLongPressMovementMethod) {
         movementMethod = LinkLongPressMovementMethod.createInstance()
       }
 
-      // Register ImageSpans from the collector
       renderer.getCollectedImageSpans().forEach { span ->
         span.registerTextView(this)
       }
 
       layoutManager.invalidateLayout()
-
-      // Update accessibility items for TalkBack navigation
       accessibilityHelper.invalidateAccessibilityItems()
+
+      if (streamingAnimation) {
+        if (fadeAnimator == null) {
+          fadeAnimator = TailFadeInAnimator(this)
+        }
+        fadeAnimator?.animate(tailStart, styledText.length)
+        previousTextLength = styledText.length
+      }
     }
 
     fun setIsSelectable(selectable: Boolean) {
