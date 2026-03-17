@@ -7,7 +7,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Stores rendered cell texts and background color for one table row.
 @interface ENRMMacOSTableRowData : NSObject
 @property (nonatomic, strong) NSArray<NSAttributedString *> *cellTexts;
 @property (nonatomic, strong) NSColor *backgroundColor;
@@ -17,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// single drawRect: pass. Avoids all NSView subview hierarchy and CALayer
 /// compositing issues on macOS where child views of layer-backed RCTUIViews
 /// frequently fail to composite correctly.
-@interface ENRMMacOSTableView : NSView
+@interface ENRMTableGridView : NSView
 
 - (void)updateWithRows:(NSArray<ENRMMacOSTableRowData *> *)rows
              columnWidths:(NSArray<NSNumber *> *)columnWidths

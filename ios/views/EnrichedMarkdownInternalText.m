@@ -7,7 +7,6 @@
 #import "RuntimeKeys.h"
 #import "StyleConfig.h"
 #import "TextViewLayoutManager.h"
-#import <React/RCTUIKit.h>
 #import <React/RCTUtils.h>
 #include <TargetConditionals.h>
 #import <objc/runtime.h>

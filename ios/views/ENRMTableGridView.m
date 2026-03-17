@@ -1,11 +1,11 @@
-#import "ENRMMacOSTableView.h"
+#import "ENRMTableGridView.h"
 
 #if TARGET_OS_OSX
 
 @implementation ENRMMacOSTableRowData
 @end
 
-@implementation ENRMMacOSTableView {
+@implementation ENRMTableGridView {
   NSArray<ENRMMacOSTableRowData *> *_tableRows;
   NSArray<NSNumber *> *_columnWidths;
   NSArray<NSNumber *> *_rowHeights;

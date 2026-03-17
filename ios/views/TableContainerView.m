@@ -10,7 +10,7 @@
 #import "StyleConfig.h"
 #include <TargetConditionals.h>
 #if TARGET_OS_OSX
-#import "ENRMMacOSTableView.h"
+#import "ENRMTableGridView.h"
 #endif
 
 @interface TableCellData : NSObject
@@ -73,10 +73,10 @@
   [self addSubview:_scrollView];
 
 #if TARGET_OS_OSX
-  // On macOS, use ENRMMacOSTableView as the NSScrollView documentView so that the
+  // On macOS, use ENRMTableGridView as the NSScrollView documentView so that the
   // coordinate system is managed correctly and the entire table is drawn in
   // a single drawRect: pass (no subview / layer compositing issues).
-  _gridContainer = [[ENRMMacOSTableView alloc] initWithFrame:CGRectZero];
+  _gridContainer = [[ENRMTableGridView alloc] initWithFrame:CGRectZero];
   [(NSScrollView *)_scrollView setDocumentView:_gridContainer];
 #else
   _gridContainer = [[RCTUIView alloc] init];
@@ -286,7 +286,7 @@
     }
   }
 
-  ENRMMacOSTableView *gridView = (ENRMMacOSTableView *)_gridContainer;
+  ENRMTableGridView *gridView = (ENRMTableGridView *)_gridContainer;
   [gridView updateWithRows:[rowDataArray copy]
                columnWidths:_colWidths
                  rowHeights:_rowHeights
@@ -625,10 +625,10 @@
     if (cellTexts.count > 0) {
 #if TARGET_OS_OSX
       // TODO: Implement macOS VoiceOver support for table rows using NSAccessibility.
-      // ENRMMacOSTableView draws the entire table in a single drawRect: pass, so AppKit
+      // ENRMTableGridView draws the entire table in a single drawRect: pass, so AppKit
       // cannot discover cells automatically. Needs accessibilityRole, accessibilityChildren
       // (NSAccessibilityRowRole per row, NSAccessibilityCellRole per cell), and
-      // accessibilityLabel populated from plainText on ENRMMacOSTableView.
+      // accessibilityLabel populated from plainText on ENRMTableGridView.
 #else
       UIAccessibilityElement *element = [[UIAccessibilityElement alloc] initWithAccessibilityContainer:self];
       element.accessibilityLabel = [NSString
