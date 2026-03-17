@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
 
 @class BlockStyle;
 @class RenderContext;

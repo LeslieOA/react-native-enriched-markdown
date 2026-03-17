@@ -4,7 +4,10 @@
 #import "MarkdownExtractor.h"
 #import "RTFExportUtils.h"
 #import "StyleConfig.h"
+#include <TargetConditionals.h>
+#if !TARGET_OS_OSX
 #import <UIKit/UIPasteboard.h>
+#endif
 
 static NSString *const kUTIPlainText = @"public.utf8-plain-text";
 static NSString *const kUTIMarkdown = @"net.daringfireball.markdown";
@@ -56,6 +59,35 @@ static void addHTMLData(NSMutableDictionary *items, NSAttributedString *attribut
 
 #pragma mark - Public API
 
+void copyStringToPasteboard(NSString *string)
+{
+#if TARGET_OS_OSX
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  [pasteboard clearContents];
+  [pasteboard setString:string forType:NSPasteboardTypeString];
+#else
+  [[UIPasteboard generalPasteboard] setString:string];
+#endif
+}
+
+void copyItemsToPasteboard(NSDictionary<NSString *, id> *items)
+{
+#if TARGET_OS_OSX
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  [pasteboard clearContents];
+  for (NSString *type in items) {
+    id value = items[type];
+    if ([value isKindOfClass:[NSString class]]) {
+      [pasteboard setString:value forType:type];
+    } else if ([value isKindOfClass:[NSData class]]) {
+      [pasteboard setData:value forType:type];
+    }
+  }
+#else
+  [[UIPasteboard generalPasteboard] setItems:@[ items ]];
+#endif
+}
+
 void copyAttributedStringToPasteboard(NSAttributedString *attributedString, NSString *_Nullable markdown,
                                       StyleConfig *_Nullable styleConfig)
 {
@@ -81,7 +113,7 @@ void copyAttributedStringToPasteboard(NSAttributedString *attributedString, NSSt
   addRTFDData(items, rtfPrepared, rtfRange);
   addRTFData(items, rtfPrepared, rtfRange, NSRTFTextDocumentType, kUTIRTF);
 
-  [[UIPasteboard generalPasteboard] setItems:@[ items ]];
+  copyItemsToPasteboard(items);
 }
 
 #pragma mark - Content Extraction

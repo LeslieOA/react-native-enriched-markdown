@@ -1,9 +1,52 @@
 #import "MarkdownAccessibilityElementBuilder.h"
 #import "AccessibilityInfo.h"
+#include <TargetConditionals.h>
 
 typedef NS_ENUM(NSInteger, ElementType) { ElementTypeText, ElementTypeLink, ElementTypeImage };
 
 @implementation MarkdownAccessibilityElementBuilder
+
+#if TARGET_OS_OSX
+
+// TODO: Implement VoiceOver accessibility elements for macOS using NSAccessibility.
+// This includes building heading, link, and image accessibility elements from AttributedString
+// attributes, and exposing them via NSAccessibilityElement so VoiceOver can navigate the
+// rendered markdown content. The iOS implementation below can serve as a reference.
+
++ (NSMutableArray *)buildElementsForTextView:(id)textView info:(AccessibilityInfo *)info container:(id)container
+{
+  return [NSMutableArray array];
+}
++ (NSArray *)filterHeadingElements:(NSArray *)elements
+{
+  return @[];
+}
++ (NSArray *)filterLinkElements:(NSArray *)elements
+{
+  return @[];
+}
++ (NSArray *)filterImageElements:(NSArray *)elements
+{
+  return @[];
+}
++ (id)createHeadingRotorWithElements:(NSArray *)elements
+{
+  return nil;
+}
++ (id)createLinkRotorWithElements:(NSArray *)elements
+{
+  return nil;
+}
++ (id)createImageRotorWithElements:(NSArray *)elements
+{
+  return nil;
+}
++ (NSArray *)buildRotorsFromElements:(NSArray *)elements
+{
+  return @[];
+}
+
+#else
 
 #pragma mark - Public API
 
@@ -341,5 +384,7 @@ typedef NS_ENUM(NSInteger, ElementType) { ElementTypeText, ElementTypeLink, Elem
 
   return rotors;
 }
+
+#endif // !TARGET_OS_OSX
 
 @end

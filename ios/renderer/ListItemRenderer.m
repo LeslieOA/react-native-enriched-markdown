@@ -4,6 +4,7 @@
 #import "RenderContext.h"
 #import "RendererFactory.h"
 #import "StyleConfig.h"
+#import <React/RCTUIKit.h>
 
 NSString *const ListDepthAttribute = @"ListDepth";
 NSString *const ListTypeAttribute = @"ListType";
@@ -130,7 +131,7 @@ NSString *const TaskIndexAttribute = @"TaskIndex";
                             range:(NSRange)range
                      nestingLevel:(NSInteger)nestingLevel
 {
-  UIColor *checkedColor = [_config taskListCheckedTextColor];
+  RCTUIColor *checkedColor = [_config taskListCheckedTextColor];
   BOOL shouldStrikethrough = [_config taskListCheckedStrikethrough];
 
   if (!checkedColor && !shouldStrikethrough) {
@@ -146,7 +147,7 @@ NSString *const TaskIndexAttribute = @"TaskIndex";
   if (shouldStrikethrough) {
     checkedAttrs[NSStrikethroughStyleAttributeName] = @(NSUnderlineStyleSingle);
 
-    UIColor *lineColor = checkedColor ?: [_config listStyleColor];
+    RCTUIColor *lineColor = checkedColor ?: [_config listStyleColor];
     if (lineColor) {
       checkedAttrs[NSStrikethroughColorAttributeName] = lineColor;
     }

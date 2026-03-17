@@ -1,13 +1,15 @@
 #pragma once
+#import "LinkTapUtils.h"
 #import "StyleConfig.h"
-#import <UIKit/UIKit.h>
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
 
 @class RenderContext;
 @class AccessibilityInfo;
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface EnrichedMarkdownInternalText : UIView
+@interface EnrichedMarkdownInternalText : RCTUIView
 
 - (instancetype)initWithConfig:(StyleConfig *)config;
 
@@ -15,7 +17,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (CGFloat)measureHeight:(CGFloat)maxWidth;
 
-@property (nonatomic, readonly) UITextView *textView;
+@property (nonatomic, readonly) ENRMPlatformTextView *textView;
 
 @property (nonatomic, strong, nullable) AccessibilityInfo *accessibilityInfo;
 

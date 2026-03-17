@@ -1,6 +1,7 @@
 #pragma once
 #import "StyleConfig.h"
-#import <UIKit/UIKit.h>
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
 
 @class MarkdownASTNode;
 
@@ -8,7 +9,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef void (^TableLinkPressBlock)(NSString *url);
 
-@interface TableContainerView : UIView
+@interface TableContainerView : RCTUIView
 
 - (instancetype)initWithConfig:(StyleConfig *)config;
 

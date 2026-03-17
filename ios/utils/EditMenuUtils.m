@@ -1,12 +1,17 @@
 #import "EditMenuUtils.h"
 #import "PasteboardUtils.h"
 #import "StyleConfig.h"
+#include <TargetConditionals.h>
+#if !TARGET_OS_OSX
 #import <UIKit/UIPasteboard.h>
+#endif
 
 static NSString *const kMenuIdentifierStandardEdit = @"com.apple.menu.standard-edit";
 static NSString *const kActionIdentifierCopy = @"com.swmansion.enriched.markdown.copy";
 static NSString *const kActionIdentifierCopyMarkdown = @"com.swmansion.enriched.markdown.copyMarkdown";
 static NSString *const kActionIdentifierCopyImageURL = @"com.swmansion.enriched.markdown.copyImageURL";
+
+#if !TARGET_OS_OSX
 
 #pragma mark - Action Creators
 
@@ -74,7 +79,20 @@ static void insertOptionalAction(NSMutableArray<UIMenuElement *> *array, UIActio
   }
 }
 
+#endif // !TARGET_OS_OSX
+
 #pragma mark - Public API
+
+#if TARGET_OS_OSX
+
+id _Nullable buildEditMenuForSelection(NSAttributedString *attributedText, NSRange range,
+                                       NSString *_Nullable cachedMarkdown, StyleConfig *styleConfig,
+                                       NSArray *suggestedActions)
+{
+  return nil;
+}
+
+#else
 
 UIMenu *buildEditMenuForSelection(NSAttributedString *attributedText, NSRange range, NSString *_Nullable cachedMarkdown,
                                   StyleConfig *styleConfig, NSArray<UIMenuElement *> *suggestedActions)
@@ -116,3 +134,5 @@ UIMenu *buildEditMenuForSelection(NSAttributedString *attributedText, NSRange ra
 
   return [UIMenu menuWithChildren:result];
 }
+
+#endif

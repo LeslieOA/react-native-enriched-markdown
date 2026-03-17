@@ -1,6 +1,7 @@
 #pragma once
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
 
 @class StyleConfig;
 
@@ -9,6 +10,18 @@ NS_ASSUME_NONNULL_BEGIN
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/**
+ * Copies a plain string to the platform pasteboard.
+ */
+void copyStringToPasteboard(NSString *string);
+
+/**
+ * Copies a dictionary of { UTI → NSString | NSData } items to the platform pasteboard.
+ * On macOS, NSString values use setString:forType: and NSData values use setData:forType:.
+ * On iOS, the whole dictionary is passed to UIPasteboard setItems:.
+ */
+void copyItemsToPasteboard(NSDictionary<NSString *, id> *items);
 
 /**
  * Copies attributed string to pasteboard with multiple representations

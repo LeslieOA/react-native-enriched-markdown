@@ -1,11 +1,13 @@
 #pragma once
-#import <UIKit/UIKit.h>
+#import "LinkTapUtils.h"
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface ENRMTailFadeInAnimator : NSObject
 
-- (instancetype)initWithTextView:(UITextView *)textView;
+- (instancetype)initWithTextView:(ENRMPlatformTextView *)textView;
 
 - (void)animateFrom:(NSUInteger)tailStart to:(NSUInteger)tailEnd;
 - (void)cancel;

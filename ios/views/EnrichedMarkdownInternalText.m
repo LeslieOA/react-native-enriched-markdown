@@ -6,11 +6,18 @@
 #import "RuntimeKeys.h"
 #import "StyleConfig.h"
 #import "TextViewLayoutManager.h"
+#import <React/RCTUIKit.h>
+#import <React/RCTUtils.h>
+#include <TargetConditionals.h>
 #import <objc/runtime.h>
 
 @implementation EnrichedMarkdownInternalText {
-  UITextView *_textView;
+  ENRMPlatformTextView *_textView;
+#if !TARGET_OS_OSX
   NSMutableArray<UIAccessibilityElement *> *_accessibilityElements;
+#else
+  NSMutableArray *_accessibilityElements;
+#endif
   BOOL _accessibilityNeedsRebuild;
 }
 
@@ -29,20 +36,28 @@
 
 - (void)setupTextView
 {
-  _textView = [[UITextView alloc] init];
+  _textView = [[ENRMPlatformTextView alloc] init];
+#if TARGET_OS_OSX
+  _textView.string = @"";
+#else
   _textView.text = @"";
+#endif
   _textView.font = [UIFont systemFontOfSize:16.0];
-  _textView.backgroundColor = [UIColor clearColor];
-  _textView.textColor = [UIColor blackColor];
+  _textView.backgroundColor = [RCTUIColor clearColor];
+  _textView.textColor = [RCTUIColor blackColor];
   _textView.editable = NO;
+#if !TARGET_OS_OSX
   _textView.scrollEnabled = NO;
   _textView.showsVerticalScrollIndicator = NO;
   _textView.showsHorizontalScrollIndicator = NO;
   _textView.textContainerInset = UIEdgeInsetsZero;
+#endif
   _textView.textContainer.lineFragmentPadding = 0;
   _textView.linkTextAttributes = @{};
   _textView.selectable = YES;
+#if !TARGET_OS_OSX
   _textView.accessibilityElementsHidden = YES;
+#endif
 
   [self addSubview:_textView];
 
@@ -72,19 +87,29 @@
 
   objc_setAssociatedObject(_textView.textContainer, kTextViewKey, _textView, OBJC_ASSOCIATION_ASSIGN);
 
+#if TARGET_OS_OSX
+  [_textView.textStorage setAttributedString:text];
+#else
   _textView.attributedText = text;
+#endif
 
   [_textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, text.length) actualCharacterRange:NULL];
 
+#if !TARGET_OS_OSX
   [_textView setNeedsLayout];
-  [_textView setNeedsDisplay];
+#endif
+  [_textView setNeedsDisplay:YES];
 
   _accessibilityNeedsRebuild = (_accessibilityInfo != nil);
 }
 
 - (CGFloat)measureHeight:(CGFloat)maxWidth
 {
+#if TARGET_OS_OSX
+  NSAttributedString *text = _textView.textStorage;
+#else
   NSAttributedString *text = _textView.attributedText;
+#endif
   if (text.length == 0) {
     return 0;
   }
@@ -111,7 +136,7 @@
   }
 
   // Round to pixel boundaries to match React Native's <Text> measurement
-  CGFloat scale = [UIScreen mainScreen].scale;
+  CGFloat scale = RCTScreenScale();
   return ceil(measuredHeight * scale) / scale;
 }
 
@@ -129,9 +154,11 @@
     return;
   }
   _accessibilityNeedsRebuild = NO;
+#if !TARGET_OS_OSX
   _accessibilityElements = [MarkdownAccessibilityElementBuilder buildElementsForTextView:_textView
                                                                                     info:_accessibilityInfo
                                                                                container:self];
+#endif
 }
 
 - (BOOL)isAccessibilityElement

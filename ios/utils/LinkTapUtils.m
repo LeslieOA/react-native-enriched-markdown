@@ -1,6 +1,7 @@
 #import "LinkTapUtils.h"
+#include <TargetConditionals.h>
 
-NSString *_Nullable linkURLAtTapLocation(UITextView *textView, UITapGestureRecognizer *recognizer)
+NSString *_Nullable linkURLAtTapLocation(ENRMPlatformTextView *textView, ENRMTapRecognizer *recognizer)
 {
   NSLayoutManager *layoutManager = textView.layoutManager;
   CGPoint location = [recognizer locationInView:textView];
@@ -19,7 +20,7 @@ NSString *_Nullable linkURLAtTapLocation(UITextView *textView, UITapGestureRecog
   return nil;
 }
 
-NSString *_Nullable linkURLAtRange(UITextView *textView, NSRange characterRange)
+NSString *_Nullable linkURLAtRange(ENRMPlatformTextView *textView, NSRange characterRange)
 {
   if (characterRange.location >= textView.attributedText.length) {
     return nil;
@@ -27,7 +28,7 @@ NSString *_Nullable linkURLAtRange(UITextView *textView, NSRange characterRange)
   return [textView.attributedText attribute:@"linkURL" atIndex:characterRange.location effectiveRange:NULL];
 }
 
-BOOL isPointOnInteractiveElement(UITextView *textView, CGPoint point)
+BOOL isPointOnInteractiveElement(ENRMPlatformTextView *textView, CGPoint point)
 {
   NSLayoutManager *layoutManager = textView.layoutManager;
   CGPoint adjusted = CGPointMake(point.x - textView.textContainerInset.left, point.y - textView.textContainerInset.top);
