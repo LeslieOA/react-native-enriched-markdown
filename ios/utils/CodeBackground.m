@@ -125,13 +125,7 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
     UIBezierPath *strokePath =
         (isFirst && isLast) ? path : [self openBorderPathForRect:rect isFirst:isFirst isLast:isLast];
     strokePath.lineWidth = kCodeBackgroundBorderWidth;
-#if TARGET_OS_OSX
-    strokePath.lineCapStyle = NSLineCapStyleRound;
-    strokePath.lineJoinStyle = NSLineJoinStyleRound;
-#else
-    strokePath.lineCapStyle = kCGLineCapRound;
-    strokePath.lineJoinStyle = kCGLineJoinRound;
-#endif
+    BezierPathSetRoundStyle(strokePath);
     [strokePath stroke];
   }
 }

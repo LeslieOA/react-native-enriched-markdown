@@ -29,6 +29,19 @@ static inline RCTUIGraphicsImageRenderer *ImageRendererForSize(CGSize size)
 #endif
 }
 
+/// Sets round line cap and join styles on a bezier path.
+/// NSBezierPath uses NS-prefixed enum values; UIBezierPath uses kCG-prefixed constants.
+static inline void BezierPathSetRoundStyle(UIBezierPath *path)
+{
+#if TARGET_OS_OSX
+  path.lineCapStyle = NSLineCapStyleRound;
+  path.lineJoinStyle = NSLineJoinStyleRound;
+#else
+  path.lineCapStyle = kCGLineCapRound;
+  path.lineJoinStyle = kCGLineJoinRound;
+#endif
+}
+
 /// Cross-platform line segment: NSBezierPath uses lineToPoint: instead of addLineToPoint:.
 static inline void BezierPathAddLine(UIBezierPath *path, CGPoint point)
 {

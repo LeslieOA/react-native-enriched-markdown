@@ -132,13 +132,7 @@ extern NSString *const TaskCheckedAttribute;
   BezierPathAddLine(checkmark, CGPointMake(CGRectGetMaxX(rect) - inset, rect.origin.y + inset));
 
   checkmark.lineWidth = MAX(1.5, size * 0.12);
-#if TARGET_OS_OSX
-  checkmark.lineCapStyle = NSLineCapStyleRound;
-  checkmark.lineJoinStyle = NSLineJoinStyleRound;
-#else
-  checkmark.lineCapStyle = kCGLineCapRound;
-  checkmark.lineJoinStyle = kCGLineJoinRound;
-#endif
+  BezierPathSetRoundStyle(checkmark);
 
   [[_config taskListCheckmarkColor] setStroke];
   [checkmark stroke];
