@@ -134,8 +134,8 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
 {
 #if TARGET_OS_OSX
   // NSBezierPath doesn't support per-corner rounding — use uniform corner radius
-  CGFloat r = (isFirst || isLast) ? kCodeBackgroundCornerRadius : 0;
-  return UIBezierPathWithRoundedRect(rect, r);
+  CGFloat cornerRadius = (isFirst || isLast) ? kCodeBackgroundCornerRadius : 0;
+  return UIBezierPathWithRoundedRect(rect, cornerRadius);
 #else
   UIRectCorner corners = 0;
   if (isFirst)
