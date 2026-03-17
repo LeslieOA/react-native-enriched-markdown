@@ -9,9 +9,6 @@
 #import <UIKit/UIPasteboard.h>
 #endif
 
-static NSString *const kUTIPlainText = @"public.utf8-plain-text";
-static NSString *const kUTIMarkdown = @"net.daringfireball.markdown";
-static NSString *const kUTIHTML = @"public.html";
 static NSString *const kUTIRTFD = @"com.apple.rtfd";
 static NSString *const kUTIFlatRTFD = @"com.apple.flat-rtfd";
 static NSString *const kUTIRTF = @"public.rtf";
@@ -64,7 +61,7 @@ void copyStringToPasteboard(NSString *string)
 #if TARGET_OS_OSX
   NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
   [pasteboard clearContents];
-  [pasteboard setString:string forType:NSPasteboardTypeString];
+  [pasteboard setString:string forType:kUTIPlainText];
 #else
   [[UIPasteboard generalPasteboard] setString:string];
 #endif

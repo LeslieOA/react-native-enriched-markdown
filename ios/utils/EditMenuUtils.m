@@ -13,7 +13,7 @@ static NSString *const kActionIdentifierCopyImageURL = @"com.swmansion.enriched.
 static UIAction *createCopyAction(NSAttributedString *selectedText, NSString *markdown, StyleConfig *styleConfig)
 {
   return [UIAction actionWithTitle:@"Copy"
-                             image:[UIImage systemImageNamed:@"doc.on.doc"]
+                             image:[RCTUIImage systemImageNamed:@"doc.on.doc"]
                         identifier:kActionIdentifierCopy
                            handler:^(__kindof UIAction *action) {
                              copyAttributedStringToPasteboard(selectedText, markdown, styleConfig);
@@ -26,7 +26,7 @@ static UIAction *_Nullable createCopyMarkdownAction(NSString *markdown)
     return nil;
 
   return [UIAction actionWithTitle:@"Copy as Markdown"
-                             image:[UIImage systemImageNamed:@"doc.text"]
+                             image:[RCTUIImage systemImageNamed:@"doc.text"]
                         identifier:kActionIdentifierCopyMarkdown
                            handler:^(__kindof UIAction *action) { copyStringToPasteboard(markdown); }];
 }
@@ -42,7 +42,7 @@ static UIAction *_Nullable createCopyImageURLAction(NSArray<NSString *> *imageUR
                         : [NSString stringWithFormat:@"Copy %lu Image URLs", (unsigned long)imageURLs.count];
 
   return [UIAction actionWithTitle:title
-                             image:[UIImage systemImageNamed:@"link"]
+                             image:[RCTUIImage systemImageNamed:@"link"]
                         identifier:kActionIdentifierCopyImageURL
                            handler:^(__kindof UIAction *action) { copyStringToPasteboard(urlsToCopy); }];
 }

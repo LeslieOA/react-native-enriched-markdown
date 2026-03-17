@@ -469,17 +469,17 @@
     return;
 
   NSMutableDictionary *items = [NSMutableDictionary dictionary];
-  items[NSPasteboardTypeString] = plainText;
+  items[kUTIPlainText] = plainText;
 
   if (_cachedMarkdown.length > 0) {
-    items[@"net.daringfireball.markdown"] = _cachedMarkdown;
+    items[kUTIMarkdown] = _cachedMarkdown;
   }
 
   NSString *html = generateTableHTML([self rowDictionariesForHTML], self.config);
   if (html.length > 0) {
     NSData *htmlData = [html dataUsingEncoding:NSUTF8StringEncoding];
     if (htmlData)
-      items[NSPasteboardTypeHTML] = htmlData;
+      items[kUTIHTML] = htmlData;
   }
 
   copyItemsToPasteboard(items);

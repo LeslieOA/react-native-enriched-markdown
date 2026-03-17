@@ -1,6 +1,7 @@
 #import "EnrichedMarkdownInternalText.h"
 #import "AccessibilityInfo.h"
 #import "ENRMContextMenuTextView+macOS.h"
+#import "ENRMUIKit.h"
 #import "LastElementUtils.h"
 #import "MarkdownAccessibilityElementBuilder.h"
 #import "RenderContext.h"
@@ -99,18 +100,14 @@
 #if !TARGET_OS_OSX
   [_textView setNeedsLayout];
 #endif
-  [_textView setNeedsDisplay:YES];
+  ENRMSetNeedsDisplay(_textView);
 
   _accessibilityNeedsRebuild = (_accessibilityInfo != nil);
 }
 
 - (CGFloat)measureHeight:(CGFloat)maxWidth
 {
-#if TARGET_OS_OSX
-  NSAttributedString *text = _textView.textStorage;
-#else
-  NSAttributedString *text = _textView.attributedText;
-#endif
+  NSAttributedString *text = ENRMGetAttributedText(_textView);
   if (text.length == 0) {
     return 0;
   }

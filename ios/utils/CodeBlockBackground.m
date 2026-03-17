@@ -1,4 +1,5 @@
 #import "CodeBlockBackground.h"
+#import "ENRMUIKit.h"
 #import "LastElementUtils.h"
 #import "StyleConfig.h"
 
@@ -73,7 +74,7 @@
     if (borderWidth > 0) {
       [[_config codeBlockBorderColor] setStroke];
       path.lineWidth = borderWidth;
-      path.lineJoinStyle = kCGLineJoinRound;
+      BezierPathSetRoundStyle(path);
       [path stroke];
     }
   }

@@ -2,6 +2,7 @@
 #import "BlockquoteBorder.h"
 #import "ENRMFeatureFlags.h"
 #import "ENRMImageAttachment.h"
+#import "ENRMUIKit.h"
 #include <TargetConditionals.h>
 #if ENRICHED_MARKDOWN_MATH
 #import "ENRMMathInlineAttachment.h"

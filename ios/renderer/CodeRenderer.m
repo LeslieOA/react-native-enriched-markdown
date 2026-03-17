@@ -1,5 +1,6 @@
 #import "CodeRenderer.h"
 #import "CodeBackground.h"
+#import "ENRMUIKit.h"
 #import "FontUtils.h"
 #import "MarkdownASTNode.h"
 #import "RenderContext.h"

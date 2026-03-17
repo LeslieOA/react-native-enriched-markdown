@@ -1,4 +1,5 @@
 #import "TaskListTapUtils.h"
+#import "ENRMUIKit.h"
 #import "ListItemRenderer.h"
 #import "StyleConfig.h"
 #import <React/RCTI18nUtil.h>
@@ -200,7 +201,7 @@ BOOL updateTaskListItemCheckedState(ENRMPlatformTextView *textView, NSInteger ta
     [layoutManager invalidateLayoutForCharacterRange:targetItemRange actualCharacterRange:NULL];
     [layoutManager invalidateDisplayForCharacterRange:targetItemRange];
   }
-  [textView setNeedsDisplay:YES];
+  ENRMSetNeedsDisplay(textView);
 
   return YES;
 }

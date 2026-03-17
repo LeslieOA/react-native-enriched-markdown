@@ -4,6 +4,10 @@
 
 @class StyleConfig;
 
+static NSString *const kUTIPlainText = @"public.utf8-plain-text";
+static NSString *const kUTIHTML = @"public.html";
+static NSString *const kUTIMarkdown = @"net.daringfireball.markdown";
+
 NS_ASSUME_NONNULL_BEGIN
 
 #ifdef __cplusplus

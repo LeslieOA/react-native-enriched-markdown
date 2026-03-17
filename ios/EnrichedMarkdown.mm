@@ -3,6 +3,7 @@
 #import "AttributedRenderer.h"
 #import "ENRMImageAttachment.h"
 #import "ENRMMarkdownParser.h"
+#import "ENRMUIKit.h"
 #import "EditMenuUtils.h"
 
 #import "ENRMFeatureFlags.h"
@@ -230,12 +231,7 @@ using namespace facebook::react;
 
 - (CGSize)measureSize:(CGFloat)maxWidth
 {
-  UIFont *sysFont = [UIFont systemFontOfSize:16.0];
-#if TARGET_OS_OSX
-  CGFloat defaultHeight = sysFont.ascender - sysFont.descender + sysFont.leading;
-#else
-  CGFloat defaultHeight = sysFont.lineHeight;
-#endif
+  CGFloat defaultHeight = UIFontLineHeight([UIFont systemFontOfSize:16.0]);
   CGFloat totalHeight = [self computeSegmentLayoutForWidth:maxWidth applyFrames:NO];
   if (totalHeight == 0)
     return CGSizeMake(maxWidth, defaultHeight);
@@ -672,31 +668,7 @@ using namespace facebook::react;
     for (RCTUIView *segment in _segmentViews) {
       if ([segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
         EnrichedMarkdownInternalText *textSegment = (EnrichedMarkdownInternalText *)segment;
-        ENRMPlatformTextView *textView = textSegment.textView;
-#if !TARGET_OS_OSX
-        textView.contentOffset = CGPointZero;
-#endif
-
-        textView.frame = textSegment.bounds;
-        textView.textContainer.size = CGSizeMake(textView.bounds.size.width, CGFLOAT_MAX);
-
-#if TARGET_OS_OSX
-        NSUInteger textLength = textView.textStorage.length;
-#else
-        NSUInteger textLength = textView.attributedText.length;
-#endif
-        if (textLength > 0) {
-          [textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, textLength)
-                                               actualCharacterRange:NULL];
-          [textView.layoutManager ensureLayoutForTextContainer:textView.textContainer];
-        }
-
-#if !TARGET_OS_OSX
-        [textView layoutIfNeeded];
-        [textView setNeedsDisplay];
-#else
-        [textView setNeedsDisplay:YES];
-#endif
+        ENRMRefreshTextViewAfterWindowAttach(textSegment.textView, textSegment.bounds);
       }
     }
 

@@ -208,7 +208,11 @@ using namespace facebook::react;
 #else
   _textView = [[ENRMPlatformTextView alloc] init];
 #endif
+#if TARGET_OS_OSX
+  _textView.string = @"";
+#else
   _textView.text = @"";
+#endif
   _textView.font = [UIFont systemFontOfSize:16.0];
   _textView.backgroundColor = [RCTUIColor clearColor];
   _textView.textColor = [RCTUIColor blackColor];
@@ -416,12 +420,9 @@ using namespace facebook::react;
   // that corrupts the height sent to Yoga.
   if (self.bounds.size.width > 0) {
     [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
+    ENRMSetNeedsDisplay(_textView);
 #if !TARGET_OS_OSX
-    [_textView layoutIfNeeded];
-    [_textView setNeedsDisplay];
     [self setNeedsLayout];
-#else
-    [_textView setNeedsDisplay:YES];
 #endif
 
     CGSize measured = [self measureSize:self.bounds.size.width];
@@ -541,34 +542,10 @@ using namespace facebook::react;
 
   if (self.window && _renderedMarkdown != nil) {
     _textView.hidden = NO;
-#if !TARGET_OS_OSX
-    _textView.contentOffset = CGPointZero;
-#endif
-
-    _textView.frame = self.bounds;
-    _textView.textContainer.size = CGSizeMake(self.bounds.size.width, CGFLOAT_MAX);
-
-#if TARGET_OS_OSX
-    NSAttributedString *text = _textView.textStorage;
-#else
-    NSAttributedString *text = _textView.attributedText;
-#endif
-    if (text.length > 0) {
-      [_textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, text.length) actualCharacterRange:NULL];
-      [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
-    }
-
-#if TARGET_OS_OSX
-    [_textView setNeedsDisplay:YES];
-#else
-    [_textView layoutIfNeeded];
-    [_textView setNeedsDisplay];
-#endif
+    ENRMRefreshTextViewAfterWindowAttach(_textView, self.bounds);
 
     CGSize measured = [self measureSize:self.bounds.size.width];
-    BOOL needsUpdate = needsHeightUpdate(measured, self.bounds);
-
-    if (needsUpdate) {
+    if (needsHeightUpdate(measured, self.bounds)) {
       [self requestHeightUpdate];
     }
   }
