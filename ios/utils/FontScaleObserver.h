@@ -1,4 +1,4 @@
-#import <UIKit/UIKit.h>
+#import <React/RCTUIKit.h>
 
 @interface FontScaleObserver : NSObject
 

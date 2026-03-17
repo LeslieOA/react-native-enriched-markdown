@@ -1,5 +1,6 @@
 #pragma once
-#import <UIKit/UIKit.h>
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -7,7 +8,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, strong) NSString *latex;
 @property (nonatomic, assign) CGFloat fontSize;
-@property (nonatomic, strong, nullable) UIColor *mathTextColor;
+@property (nonatomic, strong, nullable) RCTUIColor *mathTextColor;
 
 @end
 

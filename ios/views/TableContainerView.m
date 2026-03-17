@@ -7,7 +7,12 @@
 #import "ParagraphStyleUtils.h"
 #import "RenderContext.h"
 #import "StyleConfig.h"
+#include <TargetConditionals.h>
+#if TARGET_OS_OSX
+#import <AppKit/NSPasteboard.h>
+#else
 #import <UIKit/UIPasteboard.h>
+#endif
 
 @interface TableCellData : NSObject
 @property (nonatomic, strong) NSMutableAttributedString *attributedText;
@@ -20,12 +25,21 @@
 @implementation TableCellData
 @end
 
+#if TARGET_OS_OSX
+@interface TableContainerView ()
+@end
+#else
 @interface TableContainerView () <UITextViewDelegate, UIContextMenuInteractionDelegate>
 @end
+#endif
 
 @implementation TableContainerView {
+#if TARGET_OS_OSX
+  NSScrollView *_scrollView;
+#else
   UIScrollView *_scrollView;
-  UIView *_gridContainer;
+#endif
+  RCTUIView *_gridContainer;
   NSArray<NSArray<TableCellData *> *> *_rows;
   NSUInteger _colCount;
 
@@ -54,6 +68,20 @@
 
 - (void)setupScrollView
 {
+#if TARGET_OS_OSX
+  _scrollView = [[NSScrollView alloc] init];
+  _scrollView.hasVerticalScroller = NO;
+  _scrollView.hasHorizontalScroller = YES;
+  _scrollView.autohidesScrollers = YES;
+  _scrollView.drawsBackground = NO;
+
+  _gridContainer = [[RCTUIView alloc] init];
+
+  NSView *documentView = [[NSView alloc] init];
+  [documentView addSubview:_gridContainer];
+  _scrollView.documentView = documentView;
+  [self addSubview:_scrollView];
+#else
   _scrollView = [[UIScrollView alloc] init];
   _scrollView.showsVerticalScrollIndicator = NO;
   _scrollView.showsHorizontalScrollIndicator = YES;
@@ -61,11 +89,12 @@
   _scrollView.alwaysBounceHorizontal = NO;
   [self addSubview:_scrollView];
 
-  _gridContainer = [[UIView alloc] init];
+  _gridContainer = [[RCTUIView alloc] init];
   [_scrollView addSubview:_gridContainer];
 
   UIContextMenuInteraction *contextMenu = [[UIContextMenuInteraction alloc] initWithDelegate:self];
   [_gridContainer addInteraction:contextMenu];
+#endif
 }
 
 - (StyleConfig *)cellConfigForHeader:(BOOL)isHeader
@@ -260,15 +289,15 @@
 {
 
   CGFloat xOffset = 0;
-  UIColor *rowBackground = isHeader ? self.config.tableHeaderBackgroundColor
-                                    : (bodyIndex % 2 == 0 ? self.config.tableRowEvenBackgroundColor
-                                                          : self.config.tableRowOddBackgroundColor);
+  RCTUIColor *rowBackground = isHeader ? self.config.tableHeaderBackgroundColor
+                                       : (bodyIndex % 2 == 0 ? self.config.tableRowEvenBackgroundColor
+                                                             : self.config.tableRowOddBackgroundColor);
 
   for (NSUInteger column = 0; column < _colCount; column++) {
     CGFloat columnWidth = [_colWidths[column] doubleValue];
     CGRect cellFrame = CGRectMake(xOffset, yOffset, columnWidth + _borderWidth, height + _borderWidth);
 
-    UIView *cellBackground = [[UIView alloc] initWithFrame:cellFrame];
+    RCTUIView *cellBackground = [[RCTUIView alloc] initWithFrame:cellFrame];
     cellBackground.backgroundColor = rowBackground;
     cellBackground.layer.borderColor = self.config.tableBorderColor.CGColor;
     cellBackground.layer.borderWidth = _borderWidth;
@@ -281,25 +310,38 @@
   }
 }
 
-- (void)addTextToCell:(UIView *)container data:(TableCellData *)data width:(CGFloat)width height:(CGFloat)height
+- (void)addTextToCell:(RCTUIView *)container data:(TableCellData *)data width:(CGFloat)width height:(CGFloat)height
 {
   const CGFloat horizontalPadding = self.config.tableCellPaddingHorizontal;
   const CGFloat verticalPadding = self.config.tableCellPaddingVertical;
 
-  UITextView *cellTextView = [self createCellTextView];
+  ENRMPlatformTextView *cellTextView = [self createCellTextView];
   cellTextView.frame =
       CGRectMake(horizontalPadding, verticalPadding, width - (horizontalPadding * 2), height - (verticalPadding * 2));
   cellTextView.attributedText = data.attributedText;
   [container addSubview:cellTextView];
 }
 
-- (UITextView *)createCellTextView
+- (ENRMPlatformTextView *)createCellTextView
 {
+#if TARGET_OS_OSX
+  ENRMPlatformTextView *textView = [[ENRMPlatformTextView alloc] init];
+  textView.editable = NO;
+  textView.selectable = NO;
+  textView.backgroundColor = [RCTUIColor clearColor];
+  textView.textContainerInset = NSEdgeInsetsZero;
+  textView.textContainer.lineFragmentPadding = 0;
+
+  UITapGestureRecognizer *tapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self
+                                                                                  action:@selector(cellTextTapped:)];
+  [textView addGestureRecognizer:tapRecognizer];
+  return textView;
+#else
   UITextView *textView = [[UITextView alloc] init];
   textView.editable = NO;
   textView.scrollEnabled = NO;
   textView.selectable = NO;
-  textView.backgroundColor = [UIColor clearColor];
+  textView.backgroundColor = [RCTUIColor clearColor];
   textView.textContainerInset = UIEdgeInsetsZero;
   textView.textContainer.lineFragmentPadding = 0;
   textView.linkTextAttributes = @{};
@@ -310,16 +352,18 @@
                                                                                   action:@selector(cellTextTapped:)];
   [textView addGestureRecognizer:tapRecognizer];
   return textView;
+#endif
 }
 
 - (void)cellTextTapped:(UITapGestureRecognizer *)recognizer
 {
-  UITextView *textView = (UITextView *)recognizer.view;
+  ENRMPlatformTextView *textView = (ENRMPlatformTextView *)recognizer.view;
   NSString *url = linkURLAtTapLocation(textView, recognizer);
   if (url && self.onLinkPress)
     self.onLinkPress(url);
 }
 
+#if !TARGET_OS_OSX
 - (BOOL)textView:(UITextView *)textView
     shouldInteractWithURL:(NSURL *)URL
                   inRange:(NSRange)range
@@ -336,7 +380,9 @@
     self.onLinkLongPress(urlString);
   return NO;
 }
+#endif
 
+#if !TARGET_OS_OSX
 - (UIContextMenuConfiguration *)contextMenuInteraction:(UIContextMenuInteraction *)interaction
                         configurationForMenuAtLocation:(CGPoint)location
 {
@@ -359,11 +405,18 @@
                      return [UIMenu menuWithTitle:@"" children:@[ copyPlainText, copyMarkdown ]];
                    }];
 }
+#endif
 
 - (void)copyMarkdownToPasteboard
 {
   if (_cachedMarkdown.length > 0) {
+#if TARGET_OS_OSX
+    NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+    [pasteboard clearContents];
+    [pasteboard setString:_cachedMarkdown forType:NSPasteboardTypeString];
+#else
     [[UIPasteboard generalPasteboard] setString:_cachedMarkdown];
+#endif
   }
 }
 
@@ -387,7 +440,19 @@
       items[@"public.html"] = htmlData;
   }
 
+#if TARGET_OS_OSX
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  [pasteboard clearContents];
+  [items enumerateKeysAndObjectsUsingBlock:^(NSString *uti, id value, BOOL *stop) {
+    if ([value isKindOfClass:[NSString class]]) {
+      [pasteboard setString:value forType:(NSPasteboardType)uti];
+    } else if ([value isKindOfClass:[NSData class]]) {
+      [pasteboard setData:value forType:(NSPasteboardType)uti];
+    }
+  }];
+#else
   [[UIPasteboard generalPasteboard] setItems:@[ items ]];
+#endif
 }
 
 - (NSString *)buildMarkdownFromRows
@@ -490,9 +555,15 @@
 {
   [super layoutSubviews];
   _scrollView.frame = self.bounds;
+#if TARGET_OS_OSX
+  CGFloat contentWidth = MAX(_totalTableWidth, self.bounds.size.width);
+  _scrollView.documentView.frame = CGRectMake(0, 0, contentWidth, _totalTableHeight);
+  _gridContainer.frame = CGRectMake(0, 0, _totalTableWidth, _totalTableHeight);
+#else
   _scrollView.contentSize = CGSizeMake(MAX(_totalTableWidth, self.bounds.size.width), _totalTableHeight);
   _scrollView.scrollEnabled = (_totalTableWidth > self.bounds.size.width);
   _gridContainer.frame = CGRectMake(0, 0, _totalTableWidth, _totalTableHeight);
+#endif
 }
 
 - (BOOL)isAccessibilityElement
@@ -500,6 +571,7 @@
   return NO;
 }
 
+#if !TARGET_OS_OSX
 - (NSArray *)accessibilityElements
 {
   if (_rows.count == 0)
@@ -531,5 +603,6 @@
   }
   return elements;
 }
+#endif
 
 @end

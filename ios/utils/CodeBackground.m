@@ -1,5 +1,6 @@
 #import "CodeBackground.h"
 #import "RenderContext.h"
+#include <TargetConditionals.h>
 
 NSString *const CodeAttributeName = @"Code";
 
@@ -24,7 +25,7 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
                        textContainer:(NSTextContainer *)textContainer
                              atPoint:(CGPoint)origin
 {
-  UIColor *backgroundColor = _config.codeBackgroundColor;
+  RCTUIColor *backgroundColor = _config.codeBackgroundColor;
   if (!backgroundColor)
     return;
 
@@ -55,8 +56,8 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
                      layoutManager:(NSLayoutManager *)layoutManager
                      textContainer:(NSTextContainer *)textContainer
                            atPoint:(CGPoint)origin
-                   backgroundColor:(UIColor *)backgroundColor
-                       borderColor:(UIColor *)borderColor
+                   backgroundColor:(RCTUIColor *)backgroundColor
+                       borderColor:(RCTUIColor *)borderColor
 {
   NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:range actualCharacterRange:NULL];
   if (glyphRange.location == NSNotFound || glyphRange.length == 0)
@@ -110,8 +111,8 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
 #pragma mark - Drawing Logic
 
 - (void)drawBackgroundAndBorders:(CGRect)rect
-                 backgroundColor:(UIColor *)backgroundColor
-                     borderColor:(UIColor *)borderColor
+                 backgroundColor:(RCTUIColor *)backgroundColor
+                     borderColor:(RCTUIColor *)borderColor
                          isFirst:(BOOL)isFirst
                           isLast:(BOOL)isLast
 {
@@ -124,14 +125,23 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
     UIBezierPath *strokePath =
         (isFirst && isLast) ? path : [self openBorderPathForRect:rect isFirst:isFirst isLast:isLast];
     strokePath.lineWidth = kCodeBackgroundBorderWidth;
+#if TARGET_OS_OSX
+    strokePath.lineCapStyle = NSLineCapStyleRound;
+    strokePath.lineJoinStyle = NSLineJoinStyleRound;
+#else
     strokePath.lineCapStyle = kCGLineCapRound;
     strokePath.lineJoinStyle = kCGLineJoinRound;
+#endif
     [strokePath stroke];
   }
 }
 
 - (UIBezierPath *)pathForRect:(CGRect)rect isFirst:(BOOL)isFirst isLast:(BOOL)isLast
 {
+#if TARGET_OS_OSX
+  CGFloat radius = (isFirst || isLast) ? kCodeBackgroundCornerRadius : 0;
+  return UIBezierPathWithRoundedRect(rect, radius);
+#else
   UIRectCorner corners = 0;
   if (isFirst)
     corners |= (UIRectCornerTopLeft | UIRectCornerBottomLeft);
@@ -141,10 +151,33 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
   return [UIBezierPath bezierPathWithRoundedRect:rect
                                byRoundingCorners:corners
                                      cornerRadii:CGSizeMake(kCodeBackgroundCornerRadius, kCodeBackgroundCornerRadius)];
+#endif
 }
 
 - (UIBezierPath *)openBorderPathForRect:(CGRect)rect isFirst:(BOOL)isFirst isLast:(BOOL)isLast
 {
+#if TARGET_OS_OSX
+  CGFloat inset = kCodeBackgroundBorderWidth / 2.0;
+  CGRect insetRect = CGRectInset(rect, inset, inset);
+  UIBezierPath *path = [UIBezierPath bezierPath];
+  if (isFirst) {
+    [path moveToPoint:CGPointMake(CGRectGetMaxX(rect), insetRect.origin.y)];
+    [path lineToPoint:CGPointMake(insetRect.origin.x, insetRect.origin.y)];
+    [path lineToPoint:CGPointMake(insetRect.origin.x, CGRectGetMaxY(insetRect))];
+    [path lineToPoint:CGPointMake(CGRectGetMaxX(rect), CGRectGetMaxY(insetRect))];
+  } else if (isLast) {
+    [path moveToPoint:CGPointMake(rect.origin.x, insetRect.origin.y)];
+    [path lineToPoint:CGPointMake(CGRectGetMaxX(insetRect), insetRect.origin.y)];
+    [path lineToPoint:CGPointMake(CGRectGetMaxX(insetRect), CGRectGetMaxY(insetRect))];
+    [path lineToPoint:CGPointMake(rect.origin.x, CGRectGetMaxY(insetRect))];
+  } else {
+    [path moveToPoint:CGPointMake(rect.origin.x, insetRect.origin.y)];
+    [path lineToPoint:CGPointMake(CGRectGetMaxX(rect), insetRect.origin.y)];
+    [path moveToPoint:CGPointMake(rect.origin.x, CGRectGetMaxY(insetRect))];
+    [path lineToPoint:CGPointMake(CGRectGetMaxX(rect), CGRectGetMaxY(insetRect))];
+  }
+  return path;
+#else
   UIBezierPath *path = [UIBezierPath bezierPath];
   CGFloat r = kCodeBackgroundCornerRadius;
   CGFloat inset = kCodeBackgroundBorderWidth / 2.0;
@@ -175,6 +208,7 @@ static const CGFloat kCodeBackgroundBorderWidth = 0.5;
     [path addLineToPoint:CGPointMake(CGRectGetMaxX(rect), CGRectGetMaxY(insetRect))];
   }
   return path;
+#endif
 }
 
 #pragma mark - Helpers

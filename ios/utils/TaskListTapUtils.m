@@ -3,7 +3,7 @@
 #import "StyleConfig.h"
 #import <React/RCTI18nUtil.h>
 
-TaskListHitTestResult taskListHitTest(UITextView *textView, UITapGestureRecognizer *recognizer)
+TaskListHitTestResult taskListHitTest(ENRMPlatformTextView *textView, UITapGestureRecognizer *recognizer)
 {
   const TaskListHitTestResult notFound = {.found = NO, .index = 0, .checked = NO, .itemRange = {0, 0}};
 
@@ -54,7 +54,7 @@ TaskListHitTestResult taskListHitTest(UITextView *textView, UITapGestureRecogniz
                                  .itemRange = fullItemRange};
 }
 
-NSRange taskListItemFullRange(UITextView *textView, NSInteger taskIndex)
+NSRange taskListItemFullRange(ENRMPlatformTextView *textView, NSInteger taskIndex)
 {
   __block NSRange fullItemRange = NSMakeRange(NSNotFound, 0);
   [textView.attributedText enumerateAttribute:TaskIndexAttribute
@@ -80,7 +80,7 @@ NSRange taskListItemFullRange(UITextView *textView, NSInteger taskIndex)
   return fullItemRange;
 }
 
-NSString *taskListItemText(UITextView *textView, NSRange itemRange)
+NSString *taskListItemText(ENRMPlatformTextView *textView, NSRange itemRange)
 {
   NSAttributedString *attrString = textView.attributedText;
   NSUInteger textLength = attrString.length;
@@ -105,7 +105,7 @@ NSString *taskListItemText(UITextView *textView, NSRange itemRange)
   return [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
-BOOL handleTaskListTap(UITextView *textView, UITapGestureRecognizer *recognizer,
+BOOL handleTaskListTap(ENRMPlatformTextView *textView, UITapGestureRecognizer *recognizer,
                        void (^handler)(NSInteger index, BOOL checked, NSString *itemText))
 {
   TaskListHitTestResult hit = taskListHitTest(textView, recognizer);
@@ -141,7 +141,8 @@ NSString *toggleTaskListItemAtIndex(NSString *markdown, NSInteger targetIndex, B
   return [result copy];
 }
 
-BOOL updateTaskListItemCheckedState(UITextView *textView, NSInteger targetIndex, BOOL newChecked, StyleConfig *config)
+BOOL updateTaskListItemCheckedState(ENRMPlatformTextView *textView, NSInteger targetIndex, BOOL newChecked,
+                                    StyleConfig *config)
 {
   NSAttributedString *originalText = textView.attributedText;
   if (!originalText)
@@ -156,8 +157,8 @@ BOOL updateTaskListItemCheckedState(UITextView *textView, NSInteger targetIndex,
 
   NSMutableAttributedString *mutableText = [originalText mutableCopy];
 
-  UIColor *checkedColor = [config taskListCheckedTextColor];
-  UIColor *listStyleColor = [config listStyleColor];
+  RCTUIColor *checkedColor = [config taskListCheckedTextColor];
+  RCTUIColor *listStyleColor = [config listStyleColor];
   BOOL shouldStrikethrough = [config taskListCheckedStrikethrough];
 
   [mutableText
@@ -198,12 +199,16 @@ BOOL updateTaskListItemCheckedState(UITextView *textView, NSInteger targetIndex,
     [layoutManager invalidateLayoutForCharacterRange:targetItemRange actualCharacterRange:NULL];
     [layoutManager invalidateDisplayForCharacterRange:targetItemRange];
   }
+#if TARGET_OS_OSX
+  [textView setNeedsDisplay:YES];
+#else
   [textView setNeedsDisplay];
+#endif
 
   return YES;
 }
 
-BOOL handleTaskListTapWithSharedLogic(UITextView *textView, UITapGestureRecognizer *recognizer,
+BOOL handleTaskListTapWithSharedLogic(ENRMPlatformTextView *textView, UITapGestureRecognizer *recognizer,
                                       NSString *__strong *cachedMarkdown, StyleConfig *config,
                                       void (^eventEmitterBlock)(NSInteger index, BOOL checked, NSString *itemText),
                                       void (^renderBlock)(NSString *updatedMarkdown))

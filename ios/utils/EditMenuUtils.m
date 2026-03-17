@@ -1,6 +1,20 @@
 #import "EditMenuUtils.h"
 #import "PasteboardUtils.h"
 #import "StyleConfig.h"
+#import <React/RCTUIKit.h>
+#include <TargetConditionals.h>
+
+#if TARGET_OS_OSX
+
+id _Nullable buildEditMenuForSelection(NSAttributedString *attributedText, NSRange range,
+                                       NSString *_Nullable cachedMarkdown, StyleConfig *styleConfig,
+                                       NSArray *suggestedActions)
+{
+  return nil;
+}
+
+#else
+
 #import <UIKit/UIPasteboard.h>
 
 static NSString *const kMenuIdentifierStandardEdit = @"com.apple.menu.standard-edit";
@@ -116,3 +130,5 @@ UIMenu *buildEditMenuForSelection(NSAttributedString *attributedText, NSRange ra
 
   return [UIMenu menuWithChildren:result];
 }
+
+#endif

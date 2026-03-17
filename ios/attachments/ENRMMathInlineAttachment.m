@@ -1,5 +1,6 @@
 #import "ENRMMathInlineAttachment.h"
 #import "ENRMFeatureFlags.h"
+#include <TargetConditionals.h>
 
 #if ENRICHED_MARKDOWN_MATH
 #import <IosMath/IosMath.h>
@@ -29,7 +30,11 @@
     mathLabel.textColor = self.mathTextColor;
   }
 
+#if TARGET_OS_OSX
+  [mathLabel layoutSubtreeIfNeeded];
+#else
   [mathLabel layoutIfNeeded];
+#endif
 
   _displayList = mathLabel.displayList;
   if (_displayList) {
@@ -49,15 +54,43 @@
   return CGRectMake(0, -_mathDescent, _cachedSize.width, _cachedSize.height);
 }
 
-- (UIImage *)imageForBounds:(CGRect)imageBounds
-              textContainer:(NSTextContainer *)textContainer
-             characterIndex:(NSUInteger)characterIndex
+- (RCTUIImage *)imageForBounds:(CGRect)imageBounds
+                 textContainer:(NSTextContainer *)textContainer
+                characterIndex:(NSUInteger)characterIndex
 {
   [self prepareIfNeeded];
 
   if (!_displayList)
     return nil;
 
+#if TARGET_OS_OSX
+  CGFloat scale = NSScreen.mainScreen.backingScaleFactor;
+  NSImage *resultImage = [[NSImage alloc] initWithSize:_cachedSize];
+  NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL
+                                                                  pixelsWide:(NSInteger)(_cachedSize.width * scale)
+                                                                  pixelsHigh:(NSInteger)(_cachedSize.height * scale)
+                                                               bitsPerSample:8
+                                                             samplesPerPixel:4
+                                                                    hasAlpha:YES
+                                                                    isPlanar:NO
+                                                              colorSpaceName:NSCalibratedRGBColorSpace
+                                                                 bytesPerRow:0
+                                                                bitsPerPixel:0];
+  rep.size = _cachedSize;
+  [resultImage addRepresentation:rep];
+  [resultImage lockFocus];
+
+  CGContextRef ctx = [[NSGraphicsContext currentContext] CGContext];
+  CGContextSaveGState(ctx);
+  CGContextTranslateCTM(ctx, 0, _cachedSize.height);
+  CGContextScaleCTM(ctx, 1.0, -1.0);
+  _displayList.position = CGPointMake(0, _mathDescent);
+  [_displayList draw:ctx];
+  CGContextRestoreGState(ctx);
+
+  [resultImage unlockFocus];
+  return resultImage;
+#else
   UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat preferredFormat];
   format.opaque = NO;
 
@@ -76,6 +109,7 @@
 
     CGContextRestoreGState(ctx);
   }];
+#endif
 }
 
 @end

@@ -1,19 +1,20 @@
 #import "ENRMTailFadeInAnimator.h"
 #import <QuartzCore/QuartzCore.h>
+#include <TargetConditionals.h>
 
 static const NSTimeInterval kFadeDuration = 0.20;
 
 typedef struct {
   NSRange range;
-  __unsafe_unretained UIColor *color;
+  __unsafe_unretained RCTUIColor *color;
 } ENRMColorEntry;
 
 @implementation ENRMTailFadeInAnimator {
   __weak UITextView *_textView;
-  CADisplayLink *_displayLink;
+  id _displayLink;
   CFTimeInterval _startTime;
 
-  NSArray<UIColor *> *_retainedColors;
+  NSArray<RCTUIColor *> *_retainedColors;
   ENRMColorEntry *_colorEntries;
   NSUInteger _entriesCount;
 }
@@ -47,13 +48,22 @@ typedef struct {
   [self updateAlpha:0.0];
 
   _startTime = CACurrentMediaTime();
+#if TARGET_OS_OSX
+  // On macOS, use a simple timer instead of CADisplayLink
+  _displayLink = [NSTimer scheduledTimerWithTimeInterval:1.0 / 60.0
+                                                  target:self
+                                                selector:@selector(step:)
+                                                userInfo:nil
+                                                 repeats:YES];
+#else
   _displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(step:)];
   // 0 tells the system to use the display's maximum frame rate — 60 Hz on standard displays and 120 Hz on ProMotion ones
   _displayLink.preferredFramesPerSecond = 0;
   [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
+#endif
 }
 
-- (void)step:(CADisplayLink *)link
+- (void)step:(id)link
 {
   CFTimeInterval elapsed = CACurrentMediaTime() - _startTime;
   CGFloat progress = fmin(elapsed / kFadeDuration, 1.0);
@@ -77,7 +87,7 @@ typedef struct {
   for (NSUInteger i = 0; i < _entriesCount; i++) {
     ENRMColorEntry entry = _colorEntries[i];
     if (NSMaxRange(entry.range) <= storage.length) {
-      UIColor *fadedColor = [entry.color colorWithAlphaComponent:alpha];
+      RCTUIColor *fadedColor = [entry.color colorWithAlphaComponent:alpha];
       [storage addAttribute:NSForegroundColorAttributeName value:fadedColor range:entry.range];
     }
   }
@@ -88,13 +98,13 @@ typedef struct {
 {
   [self cleanupEntries];
 
-  NSMutableArray<UIColor *> *colors = [NSMutableArray array];
+  NSMutableArray<RCTUIColor *> *colors = [NSMutableArray array];
   NSMutableArray<NSValue *> *ranges = [NSMutableArray array];
   [storage enumerateAttribute:NSForegroundColorAttributeName
                       inRange:range
                       options:0
-                   usingBlock:^(UIColor *color, NSRange subRange, BOOL *stop) {
-                     [colors addObject:color ?: [UIColor labelColor]];
+                   usingBlock:^(RCTUIColor *color, NSRange subRange, BOOL *stop) {
+                     [colors addObject:color ?: [RCTUIColor labelColor]];
                      [ranges addObject:[NSValue valueWithRange:subRange]];
                    }];
 

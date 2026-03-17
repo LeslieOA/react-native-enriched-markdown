@@ -1,16 +1,25 @@
 #import "EnrichedMarkdownInternalText.h"
 #import "AccessibilityInfo.h"
 #import "LastElementUtils.h"
-#import "MarkdownAccessibilityElementBuilder.h"
 #import "RenderContext.h"
 #import "RuntimeKeys.h"
 #import "StyleConfig.h"
 #import "TextViewLayoutManager.h"
 #import <objc/runtime.h>
 
+#include <TargetConditionals.h>
+
+#if !TARGET_OS_OSX
+#import "MarkdownAccessibilityElementBuilder.h"
+#endif
+
 @implementation EnrichedMarkdownInternalText {
-  UITextView *_textView;
+  ENRMPlatformTextView *_textView;
+#if TARGET_OS_OSX
+  NSMutableArray *_accessibilityElements;
+#else
   NSMutableArray<UIAccessibilityElement *> *_accessibilityElements;
+#endif
   BOOL _accessibilityNeedsRebuild;
 }
 
@@ -29,20 +38,26 @@
 
 - (void)setupTextView
 {
-  _textView = [[UITextView alloc] init];
+  _textView = [[ENRMPlatformTextView alloc] init];
   _textView.text = @"";
   _textView.font = [UIFont systemFontOfSize:16.0];
-  _textView.backgroundColor = [UIColor clearColor];
-  _textView.textColor = [UIColor blackColor];
+  _textView.backgroundColor = [RCTUIColor clearColor];
+  _textView.textColor = [RCTUIColor blackColor];
   _textView.editable = NO;
   _textView.scrollEnabled = NO;
+#if !TARGET_OS_OSX
   _textView.showsVerticalScrollIndicator = NO;
   _textView.showsHorizontalScrollIndicator = NO;
   _textView.textContainerInset = UIEdgeInsetsZero;
+#else
+  _textView.textContainerInsets = UIEdgeInsetsZero;
+#endif
   _textView.textContainer.lineFragmentPadding = 0;
   _textView.linkTextAttributes = @{};
   _textView.selectable = YES;
+#if !TARGET_OS_OSX
   _textView.accessibilityElementsHidden = YES;
+#endif
 
   [self addSubview:_textView];
 
@@ -76,8 +91,12 @@
 
   [_textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, text.length) actualCharacterRange:NULL];
 
+#if TARGET_OS_OSX
+  [_textView setNeedsDisplay:YES];
+#else
   [_textView setNeedsLayout];
   [_textView setNeedsDisplay];
+#endif
 
   _accessibilityNeedsRebuild = (_accessibilityInfo != nil);
 }
@@ -111,7 +130,11 @@
   }
 
   // Round to pixel boundaries to match React Native's <Text> measurement
+#if TARGET_OS_OSX
+  CGFloat scale = NSScreen.mainScreen.backingScaleFactor;
+#else
   CGFloat scale = [UIScreen mainScreen].scale;
+#endif
   return ceil(measuredHeight * scale) / scale;
 }
 
@@ -129,9 +152,13 @@
     return;
   }
   _accessibilityNeedsRebuild = NO;
+#if TARGET_OS_OSX
+  _accessibilityElements = [NSMutableArray array];
+#else
   _accessibilityElements = [MarkdownAccessibilityElementBuilder buildElementsForTextView:_textView
                                                                                     info:_accessibilityInfo
                                                                                container:self];
+#endif
 }
 
 - (BOOL)isAccessibilityElement

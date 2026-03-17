@@ -27,7 +27,7 @@
 
   BlockStyle *blockStyle = [context getBlockStyle];
 
-  UIColor *codeColor = _config.codeColor;
+  RCTUIColor *codeColor = _config.codeColor;
 
   UIFont *blockFont = cachedFontFromBlockStyle(blockStyle, context);
 
@@ -67,7 +67,7 @@
     codeAttributes[CodeAttributeName] = @YES;
 
     // Store block line height directly for CodeBackground to use
-    codeAttributes[@"BlockLineHeight"] = @(blockFont.lineHeight);
+    codeAttributes[@"BlockLineHeight"] = @(UIFontLineHeight(blockFont));
 
     [output setAttributes:codeAttributes range:range];
   }

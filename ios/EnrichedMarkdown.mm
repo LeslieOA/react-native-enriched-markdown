@@ -3,7 +3,6 @@
 #import "AttributedRenderer.h"
 #import "ENRMImageAttachment.h"
 #import "ENRMMarkdownParser.h"
-#import "EditMenuUtils.h"
 
 #import "ENRMFeatureFlags.h"
 
@@ -17,7 +16,6 @@
 #import "LastElementUtils.h"
 #import "LinkTapUtils.h"
 #import "MarkdownASTNode.h"
-#import "MarkdownAccessibilityElementBuilder.h"
 #import "MarkdownExtractor.h"
 #import "ParagraphStyleUtils.h"
 #import "RenderContext.h"
@@ -39,6 +37,16 @@
 #import <React/RCTConversions.h>
 #import <React/RCTFont.h>
 #import <react/utils/ManagedObjectWrapper.h>
+
+#include <TargetConditionals.h>
+
+#if !TARGET_OS_OSX
+#import "EditMenuUtils.h"
+#import "MarkdownAccessibilityElementBuilder.h"
+#else
+#import <React/RCTUITextView.h>
+typedef NSClickGestureRecognizer UITapGestureRecognizer;
+#endif
 
 using namespace facebook::react;
 
@@ -112,7 +120,11 @@ using namespace facebook::react;
 }
 @end
 
+#if TARGET_OS_OSX
+@interface EnrichedMarkdown () <RCTEnrichedMarkdownViewProtocol, NSTextViewDelegate>
+#else
 @interface EnrichedMarkdown () <RCTEnrichedMarkdownViewProtocol, UITextViewDelegate>
+#endif
 @end
 
 @implementation EnrichedMarkdown {
@@ -121,7 +133,7 @@ using namespace facebook::react;
   ENRMMd4cFlags *_md4cFlags;
   NSString *_cachedMarkdown;
   NSString *_renderedMarkdown;
-  NSMutableArray<UIView *> *_segmentViews;
+  NSMutableArray<RCTUIView *> *_segmentViews;
 
   dispatch_queue_t _renderQueue;
   NSUInteger _currentRenderId;
@@ -149,7 +161,7 @@ using namespace facebook::react;
     static const auto defaultProps = std::make_shared<const EnrichedMarkdownProps>();
     _props = defaultProps;
 
-    self.backgroundColor = [UIColor clearColor];
+    self.backgroundColor = [RCTUIColor clearColor];
     _parser = [[ENRMMarkdownParser alloc] init];
     _md4cFlags = [ENRMMd4cFlags defaultFlags];
     _segmentViews = [NSMutableArray array];
@@ -187,7 +199,7 @@ using namespace facebook::react;
   __block CGFloat yOffset = 0.0;
   const NSUInteger lastIndex = _segmentViews.count - 1;
 
-  [_segmentViews enumerateObjectsUsingBlock:^(UIView *segment, NSUInteger i, BOOL *stop) {
+  [_segmentViews enumerateObjectsUsingBlock:^(RCTUIView *segment, NSUInteger i, BOOL *stop) {
     const BOOL isLast = (i == lastIndex);
     const BOOL shouldAddBottomMargin = (!isLast || _allowTrailingMargin);
 
@@ -230,13 +242,17 @@ using namespace facebook::react;
 
 - (CGSize)measureSize:(CGFloat)maxWidth
 {
-  CGFloat defaultHeight = [UIFont systemFontOfSize:16.0].lineHeight;
+  CGFloat defaultHeight = UIFontLineHeight([UIFont systemFontOfSize:16.0]);
   CGFloat totalHeight = [self computeSegmentLayoutForWidth:maxWidth applyFrames:NO];
   if (totalHeight == 0)
     return CGSizeMake(maxWidth, defaultHeight);
 
-  // Round to pixel boundaries to match React Native's <Text> measurement
+    // Round to pixel boundaries to match React Native's <Text> measurement
+#if TARGET_OS_OSX
+  CGFloat scale = NSScreen.mainScreen.backingScaleFactor;
+#else
   CGFloat scale = [UIScreen mainScreen].scale;
+#endif
   return CGSizeMake(maxWidth, ceil(totalHeight * scale) / scale);
 }
 
@@ -394,7 +410,7 @@ using namespace facebook::react;
     return;
   }
 
-  for (UIView *view in _segmentViews) {
+  for (RCTUIView *view in _segmentViews) {
     [view removeFromSuperview];
   }
   [_segmentViews removeAllObjects];
@@ -432,7 +448,7 @@ using namespace facebook::react;
 {
   _renderedMarkdown = [_cachedMarkdown copy];
 
-  for (UIView *view in _segmentViews) {
+  for (RCTUIView *view in _segmentViews) {
     [view removeFromSuperview];
   }
   [_segmentViews removeAllObjects];
@@ -587,7 +603,7 @@ using namespace facebook::react;
 
   _selectable = newViewProps.selectable;
 
-  for (UIView *segment in _segmentViews) {
+  for (RCTUIView *segment in _segmentViews) {
     if ([segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
       EnrichedMarkdownInternalText *textSegment = (EnrichedMarkdownInternalText *)segment;
       if (textSegment.textView.selectable != newViewProps.selectable) {
@@ -644,15 +660,27 @@ using namespace facebook::react;
   [super didMoveToWindow];
 
   if (self.window && _renderedMarkdown != nil) {
-    for (UIView *segment in _segmentViews) {
+    for (RCTUIView *segment in _segmentViews) {
       if ([segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
         EnrichedMarkdownInternalText *textSegment = (EnrichedMarkdownInternalText *)segment;
-        UITextView *textView = textSegment.textView;
+        ENRMPlatformTextView *textView = textSegment.textView;
+#if !TARGET_OS_OSX
         textView.contentOffset = CGPointZero;
+#endif
 
         textView.frame = textSegment.bounds;
         textView.textContainer.size = CGSizeMake(textView.bounds.size.width, CGFLOAT_MAX);
 
+#if TARGET_OS_OSX
+        if ([[textView textStorage] length] > 0) {
+          [textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, [[textView textStorage] length])
+                                               actualCharacterRange:NULL];
+          [textView.layoutManager ensureLayoutForTextContainer:textView.textContainer];
+        }
+
+        [textView layoutSubtreeIfNeeded];
+        [textView setNeedsDisplay:YES];
+#else
         if (textView.attributedText.length > 0) {
           [textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, textView.attributedText.length)
                                                actualCharacterRange:NULL];
@@ -661,6 +689,7 @@ using namespace facebook::react;
 
         [textView layoutIfNeeded];
         [textView setNeedsDisplay];
+#endif
       }
     }
 
@@ -678,13 +707,17 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
 
 - (facebook::react::SharedTouchEventEmitter)touchEventEmitterAtPoint:(CGPoint)point
 {
-  for (UIView *segment in _segmentViews) {
+  for (RCTUIView *segment in _segmentViews) {
     if (![segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
       continue;
     }
     EnrichedMarkdownInternalText *textSegment = (EnrichedMarkdownInternalText *)segment;
     CGPoint segmentPoint = [self convertPoint:point toView:textSegment.textView];
+#if TARGET_OS_OSX
+    if ([textSegment.textView mouse:segmentPoint inRect:textSegment.textView.bounds]) {
+#else
     if ([textSegment.textView pointInside:segmentPoint withEvent:nil]) {
+#endif
       if (isPointOnInteractiveElement(textSegment.textView, segmentPoint)) {
         return nil;
       }
@@ -697,7 +730,7 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
 
 - (void)textTapped:(UITapGestureRecognizer *)recognizer
 {
-  UITextView *textView = (UITextView *)recognizer.view;
+  ENRMPlatformTextView *textView = (ENRMPlatformTextView *)recognizer.view;
 
   if (handleTaskListTapWithSharedLogic(
           textView, recognizer, &self->_cachedMarkdown, self->_config,
@@ -725,11 +758,14 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
   }
 
   // Tapping on non-interactive area: dismiss any active text selection
+#if !TARGET_OS_OSX
   if (textView.selectedTextRange != nil) {
     textView.selectedTextRange = nil;
   }
+#endif
 }
 
+#if !TARGET_OS_OSX
 - (UIMenu *)textView:(UITextView *)textView
     editMenuForTextInRange:(NSRange)range
           suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0))
@@ -737,7 +773,9 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
   NSString *segmentMarkdown = extractMarkdownFromAttributedString(textView.attributedText, range);
   return buildEditMenuForSelection(textView.attributedText, range, segmentMarkdown, _config, suggestedActions);
 }
+#endif
 
+#if !TARGET_OS_OSX
 - (BOOL)textView:(UITextView *)textView
     shouldInteractWithURL:(NSURL *)URL
                   inRange:(NSRange)characterRange
@@ -759,6 +797,7 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
   }
   return NO;
 }
+#endif
 
 - (BOOL)isAccessibilityElement
 {
@@ -768,7 +807,7 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
 - (NSArray *)accessibilityElements
 {
   NSMutableArray *allElements = [NSMutableArray array];
-  for (UIView *segment in _segmentViews) {
+  for (RCTUIView *segment in _segmentViews) {
     if ([segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
       NSArray *elements = [(EnrichedMarkdownInternalText *)segment accessibilityElements];
       if (elements) {
@@ -808,9 +847,11 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
   return [[self accessibilityElements] indexOfObject:element];
 }
 
+#if !TARGET_OS_OSX
 - (NSArray<UIAccessibilityCustomRotor *> *)accessibilityCustomRotors
 {
   return [MarkdownAccessibilityElementBuilder buildRotorsFromElements:[self accessibilityElements]];
 }
+#endif
 
 @end

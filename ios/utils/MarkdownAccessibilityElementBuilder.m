@@ -1,5 +1,8 @@
 #import "MarkdownAccessibilityElementBuilder.h"
 #import "AccessibilityInfo.h"
+#include <TargetConditionals.h>
+
+#if !TARGET_OS_OSX
 
 typedef NS_ENUM(NSInteger, ElementType) { ElementTypeText, ElementTypeLink, ElementTypeImage };
 
@@ -343,3 +346,5 @@ typedef NS_ENUM(NSInteger, ElementType) { ElementTypeText, ElementTypeLink, Elem
 }
 
 @end
+
+#endif

@@ -1,6 +1,16 @@
 #pragma once
 
-#import <UIKit/UIKit.h>
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
+#include <TargetConditionals.h>
+
+#if TARGET_OS_OSX
+#import <React/RCTUITextView.h>
+typedef RCTUITextView ENRMPlatformTextView;
+typedef NSClickGestureRecognizer UITapGestureRecognizer;
+#else
+typedef UITextView ENRMPlatformTextView;
+#endif
 
 @class StyleConfig;
 
@@ -17,20 +27,21 @@ typedef struct {
   NSRange itemRange;
 } TaskListHitTestResult;
 
-TaskListHitTestResult taskListHitTest(UITextView *textView, UITapGestureRecognizer *recognizer);
+TaskListHitTestResult taskListHitTest(ENRMPlatformTextView *textView, UITapGestureRecognizer *recognizer);
 
-NSRange taskListItemFullRange(UITextView *textView, NSInteger taskIndex);
+NSRange taskListItemFullRange(ENRMPlatformTextView *textView, NSInteger taskIndex);
 
-NSString *taskListItemText(UITextView *textView, NSRange itemRange);
+NSString *taskListItemText(ENRMPlatformTextView *textView, NSRange itemRange);
 
-BOOL handleTaskListTap(UITextView *textView, UITapGestureRecognizer *recognizer,
+BOOL handleTaskListTap(ENRMPlatformTextView *textView, UITapGestureRecognizer *recognizer,
                        void (^handler)(NSInteger index, BOOL checked, NSString *itemText));
 
 NSString *toggleTaskListItemAtIndex(NSString *markdown, NSInteger index, BOOL checked);
 
-BOOL updateTaskListItemCheckedState(UITextView *textView, NSInteger targetIndex, BOOL newChecked, StyleConfig *config);
+BOOL updateTaskListItemCheckedState(ENRMPlatformTextView *textView, NSInteger targetIndex, BOOL newChecked,
+                                    StyleConfig *config);
 
-BOOL handleTaskListTapWithSharedLogic(UITextView *textView, UITapGestureRecognizer *recognizer,
+BOOL handleTaskListTapWithSharedLogic(ENRMPlatformTextView *textView, UITapGestureRecognizer *recognizer,
                                       NSString *__strong *cachedMarkdown, StyleConfig *config,
                                       void (^eventEmitterBlock)(NSInteger index, BOOL checked, NSString *itemText),
                                       void (^renderBlock)(NSString *updatedMarkdown));

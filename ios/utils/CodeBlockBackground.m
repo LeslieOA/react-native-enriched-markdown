@@ -1,6 +1,7 @@
 #import "CodeBlockBackground.h"
 #import "LastElementUtils.h"
 #import "StyleConfig.h"
+#include <TargetConditionals.h>
 
 @implementation CodeBlockBackground {
   StyleConfig *_config;
@@ -62,7 +63,7 @@
   CGFloat inset = borderWidth / 2.0;
 
   CGRect insetRect = CGRectInset(blockRect, inset, inset);
-  UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:insetRect cornerRadius:MAX(0, borderRadius - inset)];
+  UIBezierPath *path = UIBezierPathWithRoundedRect(insetRect, MAX(0, borderRadius - inset));
 
   CGContextRef ctx = UIGraphicsGetCurrentContext();
   CGContextSaveGState(ctx);
@@ -73,7 +74,11 @@
     if (borderWidth > 0) {
       [[_config codeBlockBorderColor] setStroke];
       path.lineWidth = borderWidth;
+#if TARGET_OS_OSX
+      path.lineJoinStyle = NSLineJoinStyleRound;
+#else
       path.lineJoinStyle = kCGLineJoinRound;
+#endif
       [path stroke];
     }
   }

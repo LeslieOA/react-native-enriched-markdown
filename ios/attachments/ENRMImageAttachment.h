@@ -1,8 +1,16 @@
 #pragma once
-#import <UIKit/UIKit.h>
+#import <React/RCTTextUIKit.h>
+#import <React/RCTUIKit.h>
+#include <TargetConditionals.h>
+
+#if TARGET_OS_OSX
+#import <React/RCTUITextView.h>
+typedef RCTUITextView ENRMPlatformTextView;
+#else
+typedef UITextView ENRMPlatformTextView;
+#endif
 
 @class StyleConfig;
-@class UITextView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -20,8 +28,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 + (void)clearAttachmentRegistry;
 
-+ (NSCache<NSString *, UIImage *> *)originalImageCache;
-+ (NSCache<NSString *, UIImage *> *)processedImageCache;
++ (NSCache<NSString *, RCTUIImage *> *)originalImageCache;
++ (NSCache<NSString *, RCTUIImage *> *)processedImageCache;
 
 @end
 

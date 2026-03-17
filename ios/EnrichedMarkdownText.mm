@@ -5,14 +5,22 @@
 #import "ENRMImageAttachment.h"
 #import "ENRMMarkdownParser.h"
 #import "ENRMTailFadeInAnimator.h"
-#import "EditMenuUtils.h"
 #import "FontScaleObserver.h"
 #import "FontUtils.h"
 #import "HeightUpdateUtils.h"
 #import "LastElementUtils.h"
+
+#include <TargetConditionals.h>
+
+// On macOS, RCTUIKit.h does not define UITapGestureRecognizer.
+// Define it before importing headers that reference it.
+#if TARGET_OS_OSX
+#import <React/RCTUITextView.h>
+typedef NSClickGestureRecognizer UITapGestureRecognizer;
+#endif
+
 #import "LinkTapUtils.h"
 #import "MarkdownASTNode.h"
-#import "MarkdownAccessibilityElementBuilder.h"
 #import "MarkdownExtractor.h"
 #import "ParagraphStyleUtils.h"
 #import "RenderContext.h"
@@ -36,7 +44,22 @@
 
 using namespace facebook::react;
 
+#if !TARGET_OS_OSX
+#import "EditMenuUtils.h"
+#import "MarkdownAccessibilityElementBuilder.h"
+#endif
+
+#if TARGET_OS_OSX
+typedef RCTUITextView ENRMPlatformTextView;
+#else
+typedef UITextView ENRMPlatformTextView;
+#endif
+
+#if TARGET_OS_OSX
+@interface EnrichedMarkdownText () <RCTEnrichedMarkdownTextViewProtocol, NSTextViewDelegate>
+#else
 @interface EnrichedMarkdownText () <RCTEnrichedMarkdownTextViewProtocol, UITextViewDelegate>
+#endif
 - (void)setupTextView;
 - (void)renderMarkdownContent:(NSString *)markdownString;
 - (void)applyRenderedText:(NSMutableAttributedString *)attributedText;
@@ -45,7 +68,7 @@ using namespace facebook::react;
 @end
 
 @implementation EnrichedMarkdownText {
-  UITextView *_textView;
+  ENRMPlatformTextView *_textView;
   ENRMMarkdownParser *_parser;
   NSString *_cachedMarkdown;
   NSString *_renderedMarkdown;
@@ -71,7 +94,11 @@ using namespace facebook::react;
   ENRMTailFadeInAnimator *_fadeAnimator;
 
   AccessibilityInfo *_accessibilityInfo;
+#if TARGET_OS_OSX
+  NSMutableArray *_accessibilityElements;
+#else
   NSMutableArray<UIAccessibilityElement *> *_accessibilityElements;
+#endif
   BOOL _accessibilityNeedsRebuild;
 }
 
@@ -85,7 +112,7 @@ using namespace facebook::react;
 - (CGSize)measureSize:(CGFloat)maxWidth
 {
   NSAttributedString *text = _textView.attributedText;
-  CGFloat defaultHeight = [UIFont systemFontOfSize:16.0].lineHeight;
+  CGFloat defaultHeight = UIFontLineHeight([UIFont systemFontOfSize:16.0]);
 
   if (text.length == 0) {
     return CGSizeMake(maxWidth, defaultHeight);
@@ -118,7 +145,11 @@ using namespace facebook::react;
   }
 
   // Round to pixel boundaries to match React Native's <Text> measurement
+#if TARGET_OS_OSX
+  CGFloat scale = NSScreen.mainScreen.backingScaleFactor;
+#else
   CGFloat scale = [UIScreen mainScreen].scale;
+#endif
   return CGSizeMake(ceil(measuredWidth * scale) / scale, ceil(measuredHeight * scale) / scale);
 }
 
@@ -154,7 +185,7 @@ using namespace facebook::react;
     static const auto defaultProps = std::make_shared<const EnrichedMarkdownTextProps>();
     _props = defaultProps;
 
-    self.backgroundColor = [UIColor clearColor];
+    self.backgroundColor = [RCTUIColor clearColor];
     _parser = [[ENRMMarkdownParser alloc] init];
     _md4cFlags = [ENRMMd4cFlags defaultFlags];
 
@@ -165,6 +196,7 @@ using namespace facebook::react;
     _allowTrailingMargin = NO;
     _enableLinkPreview = YES;
 
+#if !TARGET_OS_OSX
     _fontScaleObserver = [[FontScaleObserver alloc] init];
     __weak EnrichedMarkdownText *weakSelf = self;
     _fontScaleObserver.onChange = ^{
@@ -178,6 +210,7 @@ using namespace facebook::react;
         [strongSelf renderMarkdownContent:strongSelf->_cachedMarkdown];
       }
     };
+#endif
 
     [self setupTextView];
   }
@@ -187,17 +220,21 @@ using namespace facebook::react;
 
 - (void)setupTextView
 {
-  _textView = [[UITextView alloc] init];
+  _textView = [[ENRMPlatformTextView alloc] init];
   _textView.text = @"";
   _textView.font = [UIFont systemFontOfSize:16.0];
-  _textView.backgroundColor = [UIColor clearColor];
-  _textView.textColor = [UIColor blackColor];
+  _textView.backgroundColor = [RCTUIColor clearColor];
+  _textView.textColor = [RCTUIColor blackColor];
   _textView.editable = NO;
   _textView.delegate = self;
   _textView.scrollEnabled = NO;
+#if !TARGET_OS_OSX
   _textView.showsVerticalScrollIndicator = NO;
   _textView.showsHorizontalScrollIndicator = NO;
   _textView.textContainerInset = UIEdgeInsetsZero;
+#else
+  _textView.textContainerInsets = UIEdgeInsetsZero;
+#endif
   _textView.textContainer.lineFragmentPadding = 0;
   // Disable UITextView's default link styling - we handle it directly in attributed strings
   _textView.linkTextAttributes = @{};
@@ -205,7 +242,9 @@ using namespace facebook::react;
   // Prevent flash before content is rendered
   _textView.hidden = YES;
   // We provide custom accessibility elements with proper traits
+#if !TARGET_OS_OSX
   _textView.accessibilityElementsHidden = YES;
+#endif
 
   UITapGestureRecognizer *tapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self
                                                                                   action:@selector(textTapped:)];
@@ -214,7 +253,7 @@ using namespace facebook::react;
   self.contentView = _textView;
 }
 
-- (void)didAddSubview:(UIView *)subview
+- (void)didAddSubview:(RCTUIView *)subview
 {
   [super didAddSubview:subview];
 
@@ -223,7 +262,7 @@ using namespace facebook::react;
   }
 }
 
-- (void)willRemoveSubview:(UIView *)subview
+- (void)willRemoveSubview:(RCTUIView *)subview
 {
   if (subview == _textView && _textView.layoutManager != nil) {
     NSLayoutManager *layoutManager = _textView.layoutManager;
@@ -377,9 +416,14 @@ using namespace facebook::react;
   // that corrupts the height sent to Yoga.
   if (self.bounds.size.width > 0) {
     [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
+#if TARGET_OS_OSX
+    [_textView layoutSubtreeIfNeeded];
+    [_textView setNeedsDisplay:YES];
+#else
     [_textView layoutIfNeeded];
-
+    [_textView setNeedsLayout];
     [_textView setNeedsDisplay];
+#endif
     [self setNeedsLayout];
 
     CGSize measured = [self measureSize:self.bounds.size.width];
@@ -499,7 +543,9 @@ using namespace facebook::react;
 
   if (self.window && _renderedMarkdown != nil) {
     _textView.hidden = NO;
+#if !TARGET_OS_OSX
     _textView.contentOffset = CGPointZero;
+#endif
 
     _textView.frame = self.bounds;
     _textView.textContainer.size = CGSizeMake(self.bounds.size.width, CGFLOAT_MAX);
@@ -510,8 +556,13 @@ using namespace facebook::react;
       [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
     }
 
+#if TARGET_OS_OSX
+    [_textView layoutSubtreeIfNeeded];
+    [_textView setNeedsDisplay:YES];
+#else
     [_textView layoutIfNeeded];
     [_textView setNeedsDisplay];
+#endif
 
     CGSize measured = [self measureSize:self.bounds.size.width];
     BOOL needsUpdate = needsHeightUpdate(measured, self.bounds);
@@ -541,7 +592,7 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
 
 - (void)textTapped:(UITapGestureRecognizer *)recognizer
 {
-  UITextView *textView = (UITextView *)recognizer.view;
+  ENRMPlatformTextView *textView = (ENRMPlatformTextView *)recognizer.view;
 
   if (handleTaskListTapWithSharedLogic(
           textView, recognizer, &self->_cachedMarkdown, self->_config,
@@ -569,13 +620,18 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
   }
 
   // Tapping on non-interactive area: dismiss any active text selection
+#if !TARGET_OS_OSX
   if (textView.selectedTextRange != nil) {
     textView.selectedTextRange = nil;
   }
+#else
+  [textView setSelectedRange:NSMakeRange(0, 0)];
+#endif
 }
 
 #pragma mark - UITextViewDelegate (Link Interaction)
 
+#if !TARGET_OS_OSX
 - (BOOL)textView:(UITextView *)textView
     shouldInteractWithURL:(NSURL *)URL
                   inRange:(NSRange)characterRange
@@ -597,15 +653,18 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
   }
   return NO;
 }
+#endif
 
 #pragma mark - UITextViewDelegate (Edit Menu)
 
+#if !TARGET_OS_OSX
 - (UIMenu *)textView:(UITextView *)textView
     editMenuForTextInRange:(NSRange)range
           suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0))
 {
   return buildEditMenuForSelection(textView.attributedText, range, _cachedMarkdown, _config, suggestedActions);
 }
+#endif
 
 #pragma mark - Accessibility (VoiceOver Navigation)
 
@@ -615,9 +674,13 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
     return;
   }
   _accessibilityNeedsRebuild = NO;
+#if TARGET_OS_OSX
+  _accessibilityElements = [NSMutableArray array];
+#else
   _accessibilityElements = [MarkdownAccessibilityElementBuilder buildElementsForTextView:_textView
                                                                                     info:_accessibilityInfo
                                                                                container:self];
+#endif
 }
 
 - (BOOL)isAccessibilityElement
@@ -652,10 +715,12 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
   return _accessibilityElements;
 }
 
+#if !TARGET_OS_OSX
 - (NSArray<UIAccessibilityCustomRotor *> *)accessibilityCustomRotors
 {
   [self rebuildAccessibilityElementsIfNeeded];
   return [MarkdownAccessibilityElementBuilder buildRotorsFromElements:_accessibilityElements];
 }
+#endif
 
 @end

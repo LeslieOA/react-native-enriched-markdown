@@ -4,7 +4,8 @@
 #import "MarkdownExtractor.h"
 #import "RTFExportUtils.h"
 #import "StyleConfig.h"
-#import <UIKit/UIPasteboard.h>
+#import <React/RCTUIKit.h>
+#include <TargetConditionals.h>
 
 static NSString *const kUTIPlainText = @"public.utf8-plain-text";
 static NSString *const kUTIMarkdown = @"net.daringfireball.markdown";
@@ -81,7 +82,19 @@ void copyAttributedStringToPasteboard(NSAttributedString *attributedString, NSSt
   addRTFDData(items, rtfPrepared, rtfRange);
   addRTFData(items, rtfPrepared, rtfRange, NSRTFTextDocumentType, kUTIRTF);
 
+#if TARGET_OS_OSX
+  NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
+  [pasteboard clearContents];
+  [items enumerateKeysAndObjectsUsingBlock:^(NSString *uti, id value, BOOL *stop) {
+    if ([value isKindOfClass:[NSString class]]) {
+      [pasteboard setString:value forType:(NSPasteboardType)uti];
+    } else if ([value isKindOfClass:[NSData class]]) {
+      [pasteboard setData:value forType:(NSPasteboardType)uti];
+    }
+  }];
+#else
   [[UIPasteboard generalPasteboard] setItems:@[ items ]];
+#endif
 }
 
 #pragma mark - Content Extraction
