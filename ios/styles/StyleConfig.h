@@ -1,6 +1,5 @@
 #pragma once
-#import <React/RCTTextUIKit.h>
-#import <React/RCTUIKit.h>
+#import "ENRMUIKit.h"
 
 @interface StyleConfig : NSObject <NSCopying>
 - (instancetype)init;

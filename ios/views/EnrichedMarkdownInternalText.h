@@ -1,8 +1,7 @@
 #pragma once
+#import "ENRMUIKit.h"
 #import "LinkTapUtils.h"
 #import "StyleConfig.h"
-#import <React/RCTTextUIKit.h>
-#import <React/RCTUIKit.h>
 
 @class RenderContext;
 @class AccessibilityInfo;

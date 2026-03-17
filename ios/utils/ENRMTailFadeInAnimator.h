@@ -1,7 +1,6 @@
 #pragma once
+#import "ENRMUIKit.h"
 #import "LinkTapUtils.h"
-#import <React/RCTTextUIKit.h>
-#import <React/RCTUIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 

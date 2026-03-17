@@ -3,7 +3,7 @@
 #include <TargetConditionals.h>
 #if TARGET_OS_OSX
 
-#import <React/RCTUIKit.h>
+#import "ENRMUIKit.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

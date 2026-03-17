@@ -1,7 +1,6 @@
 #pragma once
+#import "ENRMUIKit.h"
 #import "StyleConfig.h"
-#import <React/RCTTextUIKit.h>
-#import <React/RCTUIKit.h>
 
 @class MarkdownASTNode;
 

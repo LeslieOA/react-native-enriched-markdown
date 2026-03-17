@@ -1,6 +1,5 @@
+#import "ENRMUIKit.h"
 #import <Foundation/Foundation.h>
-#import <React/RCTTextUIKit.h>
-#import <React/RCTUIKit.h>
 
 @class StyleConfig;
 
