@@ -1,7 +1,6 @@
 #import "ENRMTailFadeInAnimator.h"
 #import "LinkTapUtils.h"
 #import <QuartzCore/QuartzCore.h>
-#import <React/RCTUIKit.h>
 #include <TargetConditionals.h>
 
 static const NSTimeInterval kFadeDuration = 0.20;
@@ -60,7 +59,10 @@ typedef struct {
   _displayLink.preferredFramesPerSecond = 0;
   [_displayLink addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
 #else
-  // On macOS, skip animation and just show content at full opacity immediately
+  // TODO: Implement the tail fade-in animation on macOS.
+  // CADisplayLink doesn't exist on macOS; the equivalent is CVDisplayLink (Core Video)
+  // or an NSTimer driven at the display refresh rate. The iOS step:/eased-progress
+  // logic below can be reused directly once a display-sync callback is wired up.
   [self updateAlpha:1.0];
   [self cleanupEntries];
 #endif

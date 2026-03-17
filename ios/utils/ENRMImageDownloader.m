@@ -1,6 +1,5 @@
 #import "ENRMImageDownloader.h"
 #import "ENRMImageAttachment.h"
-#import <React/RCTUIKit.h>
 #include <TargetConditionals.h>
 
 static const NSUInteger kDiskCacheMemoryCapacity = 10 * 1024 * 1024;
