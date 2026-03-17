@@ -100,29 +100,18 @@ using namespace facebook::react;
   // Use a layout manager + text container for measurement to avoid
   // boundingRectWithSize: height discrepancies with NSTextAttachment objects.
   //
-  // On macOS, RCTUITextView with scrollEnabled=NO sets widthTracksTextView=YES
-  // on its NSTextContainer, which locks the container width to the view's
-  // current frame width and silently overrides any explicit size we set. This
-  // means the text view's own layout manager can only measure correctly at one
-  // specific window width. To avoid this, we share the text storage with a
-  // standalone NSLayoutManager that has its own NSTextContainer sized to
-  // maxWidth × CGFLOAT_MAX, completely bypassing the frame-lock.
+  // On macOS, RCTUITextView with scrollEnabled=NO sets widthTracksTextView=YES,
+  // which would lock the container width to the view's frame and override our
+  // explicit size. Temporarily disable it so we can set the size directly.
 #if TARGET_OS_OSX
-  NSTextStorage *storage = _textView.textStorage;
-  NSTextContainer *measureContainer = [[NSTextContainer alloc] initWithSize:CGSizeMake(maxWidth, CGFLOAT_MAX)];
-  measureContainer.lineFragmentPadding = 0;
-  NSLayoutManager *measureLM = [[NSLayoutManager alloc] init];
-  [measureLM addTextContainer:measureContainer];
-  [storage addLayoutManager:measureLM];
-  [measureLM ensureLayoutForTextContainer:measureContainer];
-  CGRect usedRect = [measureLM usedRectForTextContainer:measureContainer];
-  CGRect extraFragment = measureLM.extraLineFragmentRect;
-  [storage removeLayoutManager:measureLM];
-#else
+  _textView.textContainer.widthTracksTextView = NO;
+#endif
   _textView.textContainer.size = CGSizeMake(maxWidth, CGFLOAT_MAX);
   [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
   CGRect usedRect = [_textView.layoutManager usedRectForTextContainer:_textView.textContainer];
   CGRect extraFragment = _textView.layoutManager.extraLineFragmentRect;
+#if TARGET_OS_OSX
+  _textView.textContainer.widthTracksTextView = YES;
 #endif
 
   CGFloat measuredWidth = usedRect.size.width;
