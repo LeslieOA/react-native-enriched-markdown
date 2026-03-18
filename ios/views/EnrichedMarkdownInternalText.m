@@ -44,25 +44,7 @@
   _textView = [[ENRMPlatformTextView alloc] init];
   _textView.text = @"";
 #endif
-  _textView.font = [UIFont systemFontOfSize:16.0];
-  _textView.backgroundColor = [RCTUIColor clearColor];
-  _textView.textColor = [RCTUIColor blackColor];
-  _textView.editable = NO;
-  _textView.scrollEnabled = NO;
-#if !TARGET_OS_OSX
-  _textView.showsVerticalScrollIndicator = NO;
-  _textView.showsHorizontalScrollIndicator = NO;
-  _textView.textContainerInset = UIEdgeInsetsZero;
-#else
-  _textView.textContainerInsets = UIEdgeInsetsZero;
-  _textView.drawsBackground = NO;
-#endif
-  _textView.textContainer.lineFragmentPadding = 0;
-  _textView.linkTextAttributes = @{};
-  _textView.selectable = YES;
-#if !TARGET_OS_OSX
-  _textView.accessibilityElementsHidden = YES;
-#endif
+  ENRMConfigureMarkdownTextView(_textView);
 
   [self addSubview:_textView];
 
@@ -92,11 +74,7 @@
 
   objc_setAssociatedObject(_textView.textContainer, kTextViewKey, _textView, OBJC_ASSOCIATION_ASSIGN);
 
-#if TARGET_OS_OSX
-  [_textView.textStorage setAttributedString:text];
-#else
-  _textView.attributedText = text;
-#endif
+  ENRMSetAttributedText(_textView, text);
 
   [_textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, text.length) actualCharacterRange:NULL];
 
@@ -115,21 +93,12 @@
     return 0;
   }
 
-#if TARGET_OS_OSX
-  _textView.textContainer.widthTracksTextView = NO;
-#endif
-  _textView.textContainer.size = CGSizeMake(maxWidth, CGFLOAT_MAX);
-  [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
-  CGRect usedRect = [_textView.layoutManager usedRectForTextContainer:_textView.textContainer];
-  CGRect extraFragment = _textView.layoutManager.extraLineFragmentRect;
-#if TARGET_OS_OSX
-  _textView.textContainer.widthTracksTextView = YES;
-#endif
+  ENRMTextLayoutResult layout = ENRMMeasureTextLayout(_textView, maxWidth);
 
-  CGFloat measuredHeight = usedRect.size.height;
+  CGFloat measuredHeight = layout.usedRect.size.height;
 
-  if (!CGRectIsEmpty(extraFragment)) {
-    measuredHeight -= extraFragment.size.height;
+  if (!CGRectIsEmpty(layout.extraLineFragmentRect)) {
+    measuredHeight -= layout.extraLineFragmentRect.size.height;
   }
 
   // Code block bottom padding compensation (same as EnrichedMarkdownText)
@@ -151,14 +120,6 @@
   [super layoutSubviews];
   _textView.frame = self.bounds;
 }
-
-#if TARGET_OS_OSX
-- (void)layout
-{
-  [super layout];
-  _textView.frame = self.bounds;
-}
-#endif
 
 #pragma mark - Accessibility
 

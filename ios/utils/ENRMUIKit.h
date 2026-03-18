@@ -97,6 +97,68 @@ static inline NSAttributedString *ENRMGetAttributedText(ENRMPlatformTextView *te
 #endif
 }
 
+/// Cross-platform attributed text write: NSTextView uses textStorage setAttributedString:;
+/// UITextView uses the attributedText property setter.
+static inline void ENRMSetAttributedText(ENRMPlatformTextView *textView, NSAttributedString *text)
+{
+#if TARGET_OS_OSX
+  [textView.textStorage setAttributedString:text];
+#else
+  textView.attributedText = text;
+#endif
+}
+
+/// Applies shared configuration to a text view used for markdown rendering.
+/// Handles platform differences: scroll indicators, text container insets,
+/// drawsBackground (macOS), accessibilityElementsHidden (iOS).
+static inline void ENRMConfigureMarkdownTextView(ENRMPlatformTextView *textView)
+{
+  textView.font = [UIFont systemFontOfSize:16.0];
+  textView.backgroundColor = [RCTUIColor clearColor];
+  textView.textColor = [RCTUIColor blackColor];
+  textView.editable = NO;
+  textView.scrollEnabled = NO;
+#if !TARGET_OS_OSX
+  textView.showsVerticalScrollIndicator = NO;
+  textView.showsHorizontalScrollIndicator = NO;
+  textView.textContainerInset = UIEdgeInsetsZero;
+#else
+  textView.textContainerInsets = UIEdgeInsetsZero;
+  textView.drawsBackground = NO;
+#endif
+  textView.textContainer.lineFragmentPadding = 0;
+  textView.linkTextAttributes = @{};
+  textView.selectable = YES;
+#if !TARGET_OS_OSX
+  textView.accessibilityElementsHidden = YES;
+#endif
+}
+
+/// Result of a text layout measurement pass.
+typedef struct {
+  CGRect usedRect;
+  CGRect extraLineFragmentRect;
+} ENRMTextLayoutResult;
+
+/// Measures text layout in a text view for a given width.
+/// On macOS, temporarily disables widthTracksTextView so the container width
+/// can be set directly without being overridden by the view's frame.
+static inline ENRMTextLayoutResult ENRMMeasureTextLayout(ENRMPlatformTextView *textView, CGFloat maxWidth)
+{
+#if TARGET_OS_OSX
+  textView.textContainer.widthTracksTextView = NO;
+#endif
+  textView.textContainer.size = CGSizeMake(maxWidth, CGFLOAT_MAX);
+  [textView.layoutManager ensureLayoutForTextContainer:textView.textContainer];
+  ENRMTextLayoutResult result;
+  result.usedRect = [textView.layoutManager usedRectForTextContainer:textView.textContainer];
+  result.extraLineFragmentRect = textView.layoutManager.extraLineFragmentRect;
+#if TARGET_OS_OSX
+  textView.textContainer.widthTracksTextView = YES;
+#endif
+  return result;
+}
+
 /// Cross-platform display refresh: UIView requires layoutIfNeeded before setNeedsDisplay
 /// to flush pending layout before the redraw; NSView takes a BOOL argument.
 /// Implemented as a macro to avoid Objective-C++ implicit pointer conversion issues in .mm files.

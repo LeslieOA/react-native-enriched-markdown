@@ -219,7 +219,7 @@ using namespace facebook::react;
         textSeg.textView.frame = segment.bounds;
         textSeg.textView.textContainer.size = CGSizeMake(width, CGFLOAT_MAX);
         [textSeg.textView.layoutManager ensureLayoutForTextContainer:textSeg.textView.textContainer];
-        [textSeg.textView setNeedsDisplay:YES];
+        ENRMSetNeedsDisplay(textSeg.textView);
       }
 #endif
     }

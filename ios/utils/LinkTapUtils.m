@@ -1,5 +1,4 @@
 #import "LinkTapUtils.h"
-#include <TargetConditionals.h>
 
 NSString *_Nullable linkURLAtTapLocation(ENRMPlatformTextView *textView, ENRMTapRecognizer *recognizer)
 {
@@ -12,9 +11,10 @@ NSString *_Nullable linkURLAtTapLocation(ENRMPlatformTextView *textView, ENRMTap
                                                     inTextContainer:textView.textContainer
                            fractionOfDistanceBetweenInsertionPoints:NULL];
 
-  if (characterIndex < textView.textStorage.length) {
+  NSAttributedString *attrText = ENRMGetAttributedText(textView);
+  if (characterIndex < attrText.length) {
     NSRange range;
-    return [textView.attributedText attribute:@"linkURL" atIndex:characterIndex effectiveRange:&range];
+    return [attrText attribute:@"linkURL" atIndex:characterIndex effectiveRange:&range];
   }
 
   return nil;
@@ -22,10 +22,11 @@ NSString *_Nullable linkURLAtTapLocation(ENRMPlatformTextView *textView, ENRMTap
 
 NSString *_Nullable linkURLAtRange(ENRMPlatformTextView *textView, NSRange characterRange)
 {
-  if (characterRange.location >= textView.attributedText.length) {
+  NSAttributedString *attrText = ENRMGetAttributedText(textView);
+  if (characterRange.location >= attrText.length) {
     return nil;
   }
-  return [textView.attributedText attribute:@"linkURL" atIndex:characterRange.location effectiveRange:NULL];
+  return [attrText attribute:@"linkURL" atIndex:characterRange.location effectiveRange:NULL];
 }
 
 BOOL isPointOnInteractiveElement(ENRMPlatformTextView *textView, CGPoint point)
@@ -37,10 +38,11 @@ BOOL isPointOnInteractiveElement(ENRMPlatformTextView *textView, CGPoint point)
                                                inTextContainer:textView.textContainer
                       fractionOfDistanceBetweenInsertionPoints:NULL];
 
-  if (charIndex >= textView.textStorage.length) {
+  NSAttributedString *attrText = ENRMGetAttributedText(textView);
+  if (charIndex >= attrText.length) {
     return NO;
   }
 
-  NSDictionary *attrs = [textView.attributedText attributesAtIndex:charIndex effectiveRange:NULL];
+  NSDictionary *attrs = [attrText attributesAtIndex:charIndex effectiveRange:NULL];
   return attrs[@"linkURL"] != nil || [attrs[@"TaskItem"] boolValue];
 }

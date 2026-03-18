@@ -16,11 +16,12 @@ TaskListHitTestResult taskListHitTest(ENRMPlatformTextView *textView, ENRMTapRec
   NSUInteger glyphIndex = [layoutManager glyphIndexForPoint:tapPoint inTextContainer:textContainer];
   NSUInteger charIndex = [layoutManager characterIndexForGlyphAtIndex:glyphIndex];
 
-  if (charIndex >= textView.attributedText.length) {
+  NSAttributedString *attrText = ENRMGetAttributedText(textView);
+  if (charIndex >= attrText.length) {
     return notFound;
   }
 
-  NSDictionary *attributes = [textView.attributedText attributesAtIndex:charIndex effectiveRange:NULL];
+  NSDictionary *attributes = [attrText attributesAtIndex:charIndex effectiveRange:NULL];
   BOOL isTaskItem = [attributes[TaskItemAttribute] boolValue];
 
   if (!isTaskItem) {
@@ -47,7 +48,7 @@ TaskListHitTestResult taskListHitTest(ENRMPlatformTextView *textView, ENRMTapRec
   NSRange fullItemRange = taskListItemFullRange(textView, taskIndex);
 
   if (fullItemRange.location == NSNotFound) {
-    [textView.attributedText attribute:TaskItemAttribute atIndex:charIndex effectiveRange:&fullItemRange];
+    [attrText attribute:TaskItemAttribute atIndex:charIndex effectiveRange:&fullItemRange];
   }
 
   return (TaskListHitTestResult){.found = YES,
@@ -58,33 +59,32 @@ TaskListHitTestResult taskListHitTest(ENRMPlatformTextView *textView, ENRMTapRec
 
 NSRange taskListItemFullRange(ENRMPlatformTextView *textView, NSInteger taskIndex)
 {
+  NSAttributedString *attrText = ENRMGetAttributedText(textView);
   __block NSRange fullItemRange = NSMakeRange(NSNotFound, 0);
-  [textView.attributedText enumerateAttribute:TaskIndexAttribute
-                                      inRange:NSMakeRange(0, textView.attributedText.length)
-                                      options:0
-                                   usingBlock:^(id value, NSRange range, BOOL *stop) {
-                                     if (value && [value integerValue] == taskIndex) {
-                                       NSDictionary *rangeAttrs =
-                                           [textView.attributedText attributesAtIndex:range.location
-                                                                       effectiveRange:NULL];
-                                       if ([rangeAttrs[TaskItemAttribute] boolValue]) {
-                                         if (fullItemRange.location == NSNotFound) {
-                                           fullItemRange = range;
-                                         } else {
-                                           NSUInteger newStart = MIN(fullItemRange.location, range.location);
-                                           NSUInteger newEnd = MAX(NSMaxRange(fullItemRange), NSMaxRange(range));
-                                           fullItemRange = NSMakeRange(newStart, newEnd - newStart);
-                                         }
-                                       }
-                                     }
-                                   }];
+  [attrText enumerateAttribute:TaskIndexAttribute
+                       inRange:NSMakeRange(0, attrText.length)
+                       options:0
+                    usingBlock:^(id value, NSRange range, BOOL *stop) {
+                      if (value && [value integerValue] == taskIndex) {
+                        NSDictionary *rangeAttrs = [attrText attributesAtIndex:range.location effectiveRange:NULL];
+                        if ([rangeAttrs[TaskItemAttribute] boolValue]) {
+                          if (fullItemRange.location == NSNotFound) {
+                            fullItemRange = range;
+                          } else {
+                            NSUInteger newStart = MIN(fullItemRange.location, range.location);
+                            NSUInteger newEnd = MAX(NSMaxRange(fullItemRange), NSMaxRange(range));
+                            fullItemRange = NSMakeRange(newStart, newEnd - newStart);
+                          }
+                        }
+                      }
+                    }];
 
   return fullItemRange;
 }
 
 NSString *taskListItemText(ENRMPlatformTextView *textView, NSRange itemRange)
 {
-  NSAttributedString *attrString = textView.attributedText;
+  NSAttributedString *attrString = ENRMGetAttributedText(textView);
   NSUInteger textLength = attrString.length;
 
   if (itemRange.location >= textLength || itemRange.length == 0) {
@@ -146,7 +146,7 @@ NSString *toggleTaskListItemAtIndex(NSString *markdown, NSInteger targetIndex, B
 BOOL updateTaskListItemCheckedState(ENRMPlatformTextView *textView, NSInteger targetIndex, BOOL newChecked,
                                     StyleConfig *config)
 {
-  NSAttributedString *originalText = textView.attributedText;
+  NSAttributedString *originalText = ENRMGetAttributedText(textView);
   if (!originalText)
     return NO;
 
@@ -195,7 +195,7 @@ BOOL updateTaskListItemCheckedState(ENRMPlatformTextView *textView, NSInteger ta
                 }
               }];
 
-  textView.attributedText = mutableText;
+  ENRMSetAttributedText(textView, mutableText);
   NSLayoutManager *layoutManager = textView.layoutManager;
   if (layoutManager) {
     [layoutManager invalidateLayoutForCharacterRange:targetItemRange actualCharacterRange:NULL];

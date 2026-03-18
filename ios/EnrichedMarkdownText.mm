@@ -90,37 +90,20 @@ using namespace facebook::react;
 
 - (CGSize)measureSize:(CGFloat)maxWidth
 {
-  NSAttributedString *text = _textView.attributedText;
+  NSAttributedString *text = ENRMGetAttributedText(_textView);
   CGFloat defaultHeight = UIFontLineHeight([UIFont systemFontOfSize:16.0]);
 
   if (text.length == 0) {
     return CGSizeMake(maxWidth, defaultHeight);
   }
 
-  // Use a layout manager + text container for measurement to avoid
-  // boundingRectWithSize: height discrepancies with NSTextAttachment objects.
-  //
-  // On macOS, RCTUITextView with scrollEnabled=NO sets widthTracksTextView=YES,
-  // which would lock the container width to the view's frame and override our
-  // explicit size. Temporarily disable it so we can set the size directly.
-#if TARGET_OS_OSX
-  _textView.textContainer.widthTracksTextView = NO;
-#endif
-  _textView.textContainer.size = CGSizeMake(maxWidth, CGFLOAT_MAX);
-  [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
-  CGRect usedRect = [_textView.layoutManager usedRectForTextContainer:_textView.textContainer];
-  CGRect extraFragment = _textView.layoutManager.extraLineFragmentRect;
-#if TARGET_OS_OSX
-  _textView.textContainer.widthTracksTextView = YES;
-#endif
+  ENRMTextLayoutResult layout = ENRMMeasureTextLayout(_textView, maxWidth);
 
-  CGFloat measuredWidth = usedRect.size.width;
-  CGFloat measuredHeight = usedRect.size.height;
+  CGFloat measuredWidth = layout.usedRect.size.width;
+  CGFloat measuredHeight = layout.usedRect.size.height;
 
-  // When text ends with \n (e.g. code block's bottom padding spacer),
-  // TextKit creates an "extra line fragment" after it that adds unwanted height.
-  if (!CGRectIsEmpty(extraFragment)) {
-    measuredHeight -= extraFragment.size.height;
+  if (!CGRectIsEmpty(layout.extraLineFragmentRect)) {
+    measuredHeight -= layout.extraLineFragmentRect.size.height;
   }
 
   // Code block's bottom padding is a spacer \n with minimumLineHeight = codeBlockPadding.
@@ -205,19 +188,14 @@ using namespace facebook::react;
 {
 #if TARGET_OS_OSX
   _textView = [[ENRMContextMenuTextView alloc] init];
-#else
-  _textView = [[ENRMPlatformTextView alloc] init];
-#endif
-#if TARGET_OS_OSX
   _textView.string = @"";
 #else
+  _textView = [[ENRMPlatformTextView alloc] init];
   _textView.text = @"";
 #endif
-  _textView.font = [UIFont systemFontOfSize:16.0];
-  _textView.backgroundColor = [RCTUIColor clearColor];
-  _textView.textColor = [RCTUIColor blackColor];
-  _textView.editable = NO;
+  ENRMConfigureMarkdownTextView(_textView);
   _textView.delegate = self;
+  _textView.hidden = YES;
 
 #if TARGET_OS_OSX
   __weak EnrichedMarkdownText *weakSelf = self;
@@ -231,23 +209,6 @@ using namespace facebook::react;
     return buildEditMenuForSelection(textView.textStorage, textView.selectedRange, strongSelf->_cachedMarkdown,
                                      strongSelf->_config, @[ baseMenu ]);
   };
-#endif
-  _textView.scrollEnabled = NO;
-#if !TARGET_OS_OSX
-  _textView.showsVerticalScrollIndicator = NO;
-  _textView.showsHorizontalScrollIndicator = NO;
-  _textView.textContainerInset = UIEdgeInsetsZero;
-#else
-  _textView.textContainerInsets = UIEdgeInsetsZero;
-  _textView.drawsBackground = NO;
-#endif
-  _textView.textContainer.lineFragmentPadding = 0;
-  _textView.linkTextAttributes = @{};
-  _textView.selectable = YES;
-  _textView.hidden = YES;
-#if !TARGET_OS_OSX
-  // We provide custom accessibility elements with proper traits
-  _textView.accessibilityElementsHidden = YES;
 #endif
 
   ENRMTapRecognizer *tapRecognizer = [[ENRMTapRecognizer alloc] initWithTarget:self action:@selector(textTapped:)];
@@ -517,7 +478,7 @@ using namespace facebook::react;
   if (newViewProps.streamingAnimation != oldViewProps.streamingAnimation) {
     _streamingAnimation = newViewProps.streamingAnimation;
     if (_streamingAnimation) {
-      _previousTextLength = _textView.attributedText.length;
+      _previousTextLength = ENRMGetAttributedText(_textView).length;
     } else {
       [_fadeAnimator cancel];
       _fadeAnimator = nil;
