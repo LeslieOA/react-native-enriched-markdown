@@ -11234,11 +11234,12 @@ __metadata:
     "@react-native-community/cli-platform-apple": "npm:20.0.0"
     "@react-native/babel-preset": "npm:0.81.2"
     "@react-native/metro-config": "npm:0.81.2"
+    "@types/react": "npm:^19.2.0"
     react: "npm:19.1.4"
     react-native: "npm:0.81.6"
+    react-native-builder-bob: "npm:^0.40.18"
     react-native-enriched-markdown: "npm:*"
     react-native-macos: "npm:0.81.4"
-    react-native-monorepo-config: "npm:^0.3.3"
   languageName: unknown
   linkType: soft
 
