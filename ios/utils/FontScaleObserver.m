@@ -18,6 +18,9 @@
                                                  name:UIContentSizeCategoryDidChangeNotification
                                                object:nil];
 #endif
+    // TODO: Observe macOS system font size changes. UIContentSizeCategoryDidChangeNotification
+    // is iOS-only; macOS has no direct equivalent. Possible approaches: KVO on
+    // NSApplication.effectiveAppearance or polling NSFont.systemFontSize.
   }
   return self;
 }

@@ -293,9 +293,10 @@ using namespace facebook::react;
 #if ENRICHED_MARKDOWN_MATH
     else if (child.type == MarkdownNodeTypeLatexMathDisplay) {
 #if TARGET_OS_OSX
-      // Block math on macOS is disabled — adding ENRMMathContainerView (which hosts
-      // MTMathUILabel) as a segment causes all preceding text segments to become
-      // invisible. The root cause is under investigation. Inline math ($...$) works.
+      // TODO: Fix block math rendering on macOS. Adding ENRMMathContainerView (which
+      // hosts MTMathUILabel) as a segment causes all preceding text segments to become
+      // invisible. Likely related to MTMathUILabel.layer.geometryFlipped interacting
+      // with NSTextView's coordinate system. Inline math ($...$) works.
 #else
       if (currentTextNodes.count > 0) {
         [segments addObject:[EMTextSegment segmentWithNodes:[currentTextNodes copy]]];
