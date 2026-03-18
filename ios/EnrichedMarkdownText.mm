@@ -51,6 +51,9 @@ using namespace facebook::react;
 
 #if TARGET_OS_OSX
 typedef RCTUITextView ENRMPlatformTextView;
+
+// No scroll swizzle needed — on macOS we embed the text view in a native
+// NSScrollView and let it handle scrolling directly.
 #else
 typedef UITextView ENRMPlatformTextView;
 #endif
@@ -227,12 +230,13 @@ typedef UITextView ENRMPlatformTextView;
   _textView.textColor = [RCTUIColor blackColor];
   _textView.editable = NO;
   _textView.delegate = self;
-  _textView.scrollEnabled = NO;
 #if !TARGET_OS_OSX
+  _textView.scrollEnabled = NO;
   _textView.showsVerticalScrollIndicator = NO;
   _textView.showsHorizontalScrollIndicator = NO;
   _textView.textContainerInset = UIEdgeInsetsZero;
 #else
+  _textView.scrollEnabled = YES;
   _textView.textContainerInsets = UIEdgeInsetsZero;
 #endif
   _textView.textContainer.lineFragmentPadding = 0;
@@ -250,7 +254,26 @@ typedef UITextView ENRMPlatformTextView;
                                                                                   action:@selector(textTapped:)];
   [_textView addGestureRecognizer:tapRecognizer];
 
+#if TARGET_OS_OSX
+  // On macOS, Fabric's layout system doesn't re-measure after async height
+  // updates, so the component stays at viewport height. Bypass this by
+  // embedding the text view in a native NSScrollView that handles scrolling
+  // directly, independent of RN layout.
+  NSScrollView *scrollContainer = [[NSScrollView alloc] init];
+  scrollContainer.documentView = _textView;
+  scrollContainer.hasVerticalScroller = YES;
+  scrollContainer.hasHorizontalScroller = NO;
+  scrollContainer.autohidesScrollers = YES;
+  scrollContainer.drawsBackground = NO;
+  scrollContainer.backgroundColor = [NSColor clearColor];
+  _textView.minSize = NSMakeSize(0, 0);
+  _textView.maxSize = NSMakeSize(CGFLOAT_MAX, CGFLOAT_MAX);
+  _textView.autoresizingMask = NSViewWidthSizable;
+  [_textView.textContainer setWidthTracksTextView:YES];
+  self.contentView = scrollContainer;
+#else
   self.contentView = _textView;
+#endif
 }
 
 - (void)didAddSubview:(RCTUIView *)subview
