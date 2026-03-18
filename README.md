@@ -42,12 +42,42 @@ We can help you build your next dream product –
 
 ## Prerequisites
 
-- `react-native-enriched-markdown` currently supports only Android and iOS platforms
+- `react-native-enriched-markdown` supports Android, iOS, and **macOS** (via [react-native-macos](https://github.com/nicklockwood/react-native-macos)) platforms
 - It works only with [the React Native New Architecture (Fabric)](https://reactnative.dev/architecture/landing-page) and supports following React Native releases: `0.81`, `0.82`, `0.83` and `0.84`
 
 ## Installation
 
-### Bare React Native app
+### macOS (react-native-macos)
+
+> **Note:** macOS support is provided by this fork. The upstream library does not yet support macOS.
+
+#### 1. Install from this fork
+
+```sh
+npm install github:LeslieOA/react-native-enriched-markdown-macos#feat/macos-support
+```
+
+or with yarn:
+
+```sh
+yarn add react-native-enriched-markdown@github:LeslieOA/react-native-enriched-markdown-macos#feat/macos-support
+```
+
+#### 2. Install macOS dependencies
+
+```sh
+cd macos && pod install && cd ..
+```
+
+#### 3. Build and run
+
+```sh
+npx react-native run-macos
+```
+
+The macOS port uses `#if TARGET_OS_OSX` conditionals in the native code and react-native-macos's `RCTUIKit.h` compatibility shims. On macOS, `EnrichedMarkdownText` embeds the text view in a native `NSScrollView` for scrolling — no `ScrollView` wrapper needed in your JSX.
+
+### Bare React Native app (iOS/Android)
 
 #### 1. Install the library
 
