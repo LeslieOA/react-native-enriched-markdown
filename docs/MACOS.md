@@ -4,6 +4,110 @@
 
 The macOS implementation supports the same rendering elements as iOS — CommonMark, GitHub Flavored Markdown (tables, task lists, strikethrough), inline math, images, code blocks, blockquotes, and all other supported elements.
 
+## Installation
+
+```sh
+# In your react-native-macos project
+npm install github:LeslieOA/react-native-enriched-markdown-macos#feat/macos-support-pr163
+
+cd macos && pod install && cd ..
+```
+
+## Usage
+
+The API is identical to iOS:
+
+```tsx
+import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
+
+<EnrichedMarkdownText
+  markdown={content}
+  flavor="github"
+  markdownStyle={markdownStyle}
+  onLinkPress={({ url }) => handleLink(url)}
+/>
+```
+
+## Consuming app responsibilities
+
+The library handles markdown parsing and rendering. The following behaviours are the consuming app's responsibility:
+
+### Link handling
+
+The library fires `onLinkPress` with the URL. The app decides what to do:
+
+```tsx
+const handleLinkPress = ({ url }: { url: string }) => {
+  if (url.startsWith('#')) {
+    // In-document anchor — scroll to heading (see below)
+    scrollToAnchor(url.slice(1));
+  } else if (url.startsWith('http')) {
+    // External link — open in browser
+    Linking.openURL(url);
+  } else {
+    // Relative or custom scheme — app-specific routing
+    router.navigate(url);
+  }
+};
+```
+
+### In-document anchor scrolling
+
+The library does not handle `#fragment` anchor navigation. If your markdown contains a table of contents with `[Headings](#headings)` style links, implement anchor scrolling in your app. See the [workspace harness](../macos-example/) for a reference implementation.
+
+### GitHub admonitions / callouts
+
+GitHub-flavoured callouts (`[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`) are not natively supported by the md4c parser. To render them as styled blockquotes, preprocess the markdown before passing it to the component:
+
+```tsx
+function preprocessAdmonitions(md: string): string {
+  const ADMONITION_MAP: Record<string, { emoji: string; label: string }> = {
+    NOTE:      { emoji: 'ℹ️', label: 'Note' },
+    TIP:       { emoji: '💡', label: 'Tip' },
+    IMPORTANT: { emoji: '❗', label: 'Important' },
+    WARNING:   { emoji: '⚠️', label: 'Warning' },
+    CAUTION:   { emoji: '🟠', label: 'Caution' },
+  };
+
+  return md.replace(
+    /^(> *)\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*\n/gm,
+    (_, prefix, type) => {
+      const { emoji, label } = ADMONITION_MAP[type];
+      return `${prefix}${emoji}  **${label}**\n${prefix}\n`;
+    },
+  );
+}
+
+// Usage
+<EnrichedMarkdownText
+  markdown={preprocessAdmonitions(content)}
+  flavor="github"
+/>
+```
+
+### Scroll container
+
+On macOS, the library wraps content in a native `NSScrollView` automatically. Your app does **not** need to wrap `EnrichedMarkdownText` in a React Native `ScrollView`. The component is self-scrolling.
+
+If you need programmatic scroll control (e.g. scroll-to-anchor), access the native scroll view via the component ref (not yet exposed — contributions welcome).
+
+### Dark mode
+
+Pass a `markdownStyle` prop that responds to the system colour scheme:
+
+```tsx
+import { useColorScheme } from 'react-native';
+
+const isDarkMode = useColorScheme() === 'dark';
+
+<EnrichedMarkdownText
+  markdown={content}
+  markdownStyle={isDarkMode ? darkStyle : lightStyle}
+/>
+```
+
+See [STYLES.md](./STYLES.md) for the full list of customisable style properties.
+
 ## Known limitations
 
 These will be addressed in upcoming releases:
@@ -12,6 +116,7 @@ These will be addressed in upcoming releases:
 - **Tail fade-in animation** falls back to instant reveal (no `CADisplayLink` on macOS)
 - **VoiceOver** accessibility is stubbed (pending `NSAccessibility` implementation)
 - **Font scale observation** does not respond to system font size changes
+- **GitHub callouts** require JS preprocessing (see above)
 
 ## Example app
 
