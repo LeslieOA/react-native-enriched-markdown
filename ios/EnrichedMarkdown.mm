@@ -15,6 +15,7 @@
 #import "FontScaleObserver.h"
 #import "FontUtils.h"
 #import "HeightUpdateUtils.h"
+#import "InlineHTMLPostProcessor.h"
 #import "LastElementUtils.h"
 #import "LinkTapUtils.h"
 #import "MarkdownASTNode.h"
@@ -543,6 +544,7 @@ using namespace facebook::react;
   context.allowFontScaling = allowFontScaling;
   context.maxFontSizeMultiplier = maxFontSizeMultiplier;
   NSMutableAttributedString *attributedText = [renderer renderRoot:temporaryRoot context:context];
+  applyInlineHTMLPostProcessing(attributedText);
 
   CGFloat lastMarginBottom = [renderer getLastElementMarginBottom];
   AccessibilityInfo *accessibilityInfo = [AccessibilityInfo infoFromContext:context];

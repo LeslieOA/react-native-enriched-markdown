@@ -378,10 +378,31 @@ function stripHtmlComments(md: string): string {
 }
 
 /**
- * Apply all GFM preprocessing steps: strip HTML comments and convert admonitions.
+ * Replace a subset of GFM-supported HTML inline tags with Unicode Private Use
+ * Area markers so they survive md4c parsing (which has MD_FLAG_NOHTML set).
+ * The native side detects these PUA pairs and applies the corresponding
+ * NSAttributedString attributes (background colour, baseline offset, etc.).
+ *
+ * PUA mapping:
+ *   <mark>  → U+E001 / U+E002
+ *   <sub>   → U+E003 / U+E004
+ *   <sup>   → U+E005 / U+E006
+ */
+function replaceInlineHtmlTags(md: string): string {
+  return md
+    .replace(/<mark>([\s\S]*?)<\/mark>/gi, '\uE001$1\uE002')
+    .replace(/<sub>([\s\S]*?)<\/sub>/gi, '\uE003$1\uE004')
+    .replace(/<sup>([\s\S]*?)<\/sup>/gi, '\uE005$1\uE006');
+}
+
+/**
+ * Apply all GFM preprocessing steps: strip HTML comments, convert admonitions,
+ * and replace supported inline HTML tags with PUA markers.
  */
 function preprocessGfm(md: string, labels: Record<string, string>): string {
-  return preprocessAdmonitions(stripHtmlComments(md), labels);
+  const stripped = stripHtmlComments(md);
+  const withAdmonitions = preprocessAdmonitions(stripped, labels);
+  return replaceInlineHtmlTags(withAdmonitions);
 }
 
 export const EnrichedMarkdownText = ({

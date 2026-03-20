@@ -11,6 +11,7 @@
 #import "FontScaleObserver.h"
 #import "FontUtils.h"
 #import "HeightUpdateUtils.h"
+#import "InlineHTMLPostProcessor.h"
 #import "LastElementUtils.h"
 #import "LinkTapUtils.h"
 #import "MarkdownASTNode.h"
@@ -321,6 +322,7 @@ using namespace facebook::react;
     context.maxFontSizeMultiplier = maxFontSizeMultiplier;
     context.writingDirection = writingDirection;
     NSMutableAttributedString *attributedText = [renderer renderRoot:ast context:context];
+    applyInlineHTMLPostProcessing(attributedText);
 
     CGFloat lastElementMarginBottom = [renderer getLastElementMarginBottom];
 
@@ -355,6 +357,7 @@ using namespace facebook::react;
   context.maxFontSizeMultiplier = _maxFontSizeMultiplier;
   context.writingDirection = currentWritingDirection();
   NSMutableAttributedString *attributedText = [renderer renderRoot:ast context:context];
+  applyInlineHTMLPostProcessing(attributedText);
 
   _lastElementMarginBottom = [renderer getLastElementMarginBottom];
 
