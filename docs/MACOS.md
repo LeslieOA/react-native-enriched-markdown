@@ -53,7 +53,13 @@ const handleLinkPress = ({ url }: { url: string }) => {
 
 ### In-document anchor scrolling
 
-The library does not handle `#fragment` anchor navigation. If your markdown contains a table of contents with `[Headings](#headings)` style links, implement anchor scrolling in your app. See the [workspace harness](../macos-example/) for a reference implementation.
+The macOS port handles GFM-style `#fragment` anchor links natively. When a user clicks a link like `[Headings](#headings)`, the component scrolls to the matching heading automatically and emits `onLinkPress` so the consuming app can track/log navigation.
+
+**How it works:** The library slugifies each heading's text using GitHub's algorithm (lowercase, spaces → hyphens, strip non-alphanumeric) and matches it against the fragment. For example, `## Links & Autolinks` becomes `#links--autolinks`.
+
+**Limitation:** Only GFM-style auto-generated heading anchors are supported. Custom fragment IDs (e.g. `[Paragraphs](#p)` linking to a heading via a manually defined `#p` anchor) will not scroll — the library has no way to associate `#p` with the "Paragraphs" heading since GFM doesn't support `{#custom-id}` attribute syntax. The `onLinkPress` callback still fires for unmatched anchors, so the consuming app can handle them if needed.
+
+**Future:** Support for custom anchor IDs via `{#id}` attribute syntax (as in Pandoc/kramdown) would require parser-level changes upstream in md4c.
 
 ### GitHub admonitions / callouts
 
@@ -87,9 +93,7 @@ function preprocessAdmonitions(md: string): string {
 
 ### Scroll container
 
-On macOS, the library wraps content in a native `NSScrollView` automatically. Your app does **not** need to wrap `EnrichedMarkdownText` in a React Native `ScrollView`. The component is self-scrolling.
-
-If you need programmatic scroll control (e.g. scroll-to-anchor), access the native scroll view via the component ref (not yet exposed — contributions welcome).
+On macOS, the library wraps content in a native `NSScrollView` automatically. Your app does **not** need to wrap `EnrichedMarkdownText` in a React Native `ScrollView`. The component is self-scrolling, and GFM-style anchor links scroll natively (see above).
 
 ### Dark mode
 

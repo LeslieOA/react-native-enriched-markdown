@@ -30,6 +30,29 @@
 
 - (void)mouseDown:(NSEvent *)event
 {
+  // Check for link click BEFORE calling super (which may consume the event)
+  if (self.linkClickHandler) {
+    NSPoint windowPoint = event.locationInWindow;
+    NSPoint localPoint = [self convertPoint:windowPoint fromView:nil];
+
+    // Adjust for text container inset
+    localPoint.x -= self.textContainerOrigin.x;
+    localPoint.y -= self.textContainerOrigin.y;
+
+    NSUInteger charIndex = [self.layoutManager characterIndexForPoint:localPoint
+                                                      inTextContainer:self.textContainer
+                             fractionOfDistanceBetweenInsertionPoints:NULL];
+
+    if (charIndex < self.textStorage.length) {
+      NSString *linkURL = [self.textStorage attribute:@"linkURL" atIndex:charIndex effectiveRange:NULL];
+      if (linkURL) {
+        if (self.linkClickHandler(linkURL)) {
+          return; // Link was handled — don't pass to super
+        }
+      }
+    }
+  }
+
   [self deselectAllInContainer];
   [super mouseDown:event];
 

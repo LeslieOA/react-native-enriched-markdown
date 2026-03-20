@@ -127,7 +127,13 @@ static inline void ENRMConfigureMarkdownTextView(ENRMPlatformTextView *textView)
   textView.drawsBackground = NO;
 #endif
   textView.textContainer.lineFragmentPadding = 0;
+#if TARGET_OS_OSX
+  textView.linkTextAttributes = @{
+    NSCursorAttributeName : [NSCursor pointingHandCursor],
+  };
+#else
   textView.linkTextAttributes = @{};
+#endif
   textView.selectable = YES;
 #if !TARGET_OS_OSX
   textView.accessibilityElementsHidden = YES;

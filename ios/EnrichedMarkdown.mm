@@ -578,6 +578,25 @@ using namespace facebook::react;
     return buildEditMenuForSelection(textView.textStorage, textView.selectedRange, segmentMarkdown, strongSelf->_config,
                                      @[ baseMenu ]);
   }];
+
+  ((ENRMContextMenuTextView *)view.textView).linkClickHandler = ^BOOL(NSString *url) {
+    EnrichedMarkdown *strongSelf = weakSelf;
+    if (!strongSelf)
+      return NO;
+
+    // Handle anchor links by scrolling natively
+    if ([url hasPrefix:@"#"]) {
+      [strongSelf scrollToAnchor:url];
+    }
+
+    // Emit to JS
+    auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(strongSelf->_eventEmitter);
+    if (eventEmitter) {
+      eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
+    }
+
+    return YES;
+  };
 #endif
 
   return view;
@@ -783,6 +802,91 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
 }
 #endif
 
+/// Convert heading text to a GitHub-style anchor slug
+static NSString *slugifyHeadingEM(NSString *headingText)
+{
+  NSString *lower = [headingText lowercaseString];
+  NSMutableString *slug = [NSMutableString string];
+  for (NSUInteger i = 0; i < lower.length; i++) {
+    unichar c = [lower characterAtIndex:i];
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+      [slug appendFormat:@"%C", c];
+    } else if (c == ' ') {
+      [slug appendString:@"-"];
+    }
+  }
+  return slug;
+}
+
+#if TARGET_OS_OSX
+- (BOOL)scrollToAnchor:(NSString *)fragment
+{
+  if (!_macScrollContainer || !_macDocumentView)
+    return NO;
+
+  NSString *anchor = fragment;
+  if ([anchor hasPrefix:@"#"]) {
+    anchor = [anchor substringFromIndex:1];
+  }
+  if (anchor.length == 0)
+    return NO;
+
+  // Search through all segment views for the heading
+  for (RCTUIView *segmentView in _segmentViews) {
+    if (![segmentView isKindOfClass:[EnrichedMarkdownInternalText class]])
+      continue;
+
+    EnrichedMarkdownInternalText *internalText = (EnrichedMarkdownInternalText *)segmentView;
+    ENRMPlatformTextView *textView = internalText.textView;
+    NSAttributedString *attrText = ENRMGetAttributedText(textView);
+    if (!attrText || attrText.length == 0)
+      continue;
+
+    __block NSRange matchRange = NSMakeRange(NSNotFound, 0);
+
+    [attrText enumerateAttribute:MarkdownTypeAttributeName
+                         inRange:NSMakeRange(0, attrText.length)
+                         options:0
+                      usingBlock:^(id value, NSRange range, BOOL *stop) {
+                        if (![value isKindOfClass:[NSString class]])
+                          return;
+                        NSString *type = (NSString *)value;
+                        if (![type hasPrefix:@"heading-"])
+                          return;
+
+                        NSString *headingText = [[attrText attributedSubstringFromRange:range] string];
+                        headingText = [headingText
+                            stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                        NSString *slug = slugifyHeadingEM(headingText);
+
+                        if ([slug isEqualToString:anchor]) {
+                          matchRange = range;
+                          *stop = YES;
+                        }
+                      }];
+
+    if (matchRange.location == NSNotFound)
+      continue;
+
+    // Found the heading — get its rect within this text view
+    NSLayoutManager *layoutManager = textView.layoutManager;
+    NSTextContainer *textContainer = textView.textContainer;
+    NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:matchRange actualCharacterRange:NULL];
+    NSRect headingRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
+
+    // Convert to document view coordinates: segment frame origin + heading offset within the text view
+    CGFloat scrollY = segmentView.frame.origin.y + headingRect.origin.y;
+
+    [_macScrollContainer.contentView scrollToPoint:NSMakePoint(0, scrollY)];
+    [_macScrollContainer reflectScrolledClipView:_macScrollContainer.contentView];
+
+    return YES;
+  }
+
+  return NO;
+}
+#endif
+
 - (void)textTapped:(ENRMTapRecognizer *)recognizer
 {
   ENRMPlatformTextView *textView = (ENRMPlatformTextView *)recognizer.view;
@@ -805,6 +909,15 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
 
   NSString *url = linkURLAtTapLocation(textView, recognizer);
   if (url) {
+#if TARGET_OS_OSX
+    if ([url hasPrefix:@"#"] && [self scrollToAnchor:url]) {
+      auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(_eventEmitter);
+      if (eventEmitter) {
+        eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
+      }
+      return;
+    }
+#endif
     auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(_eventEmitter);
     if (eventEmitter) {
       eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
@@ -844,6 +957,44 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownCls(void)
     eventEmitter->onLinkLongPress({.url = std::string([urlString UTF8String])});
   }
   return NO;
+}
+#endif
+
+#if TARGET_OS_OSX
+#pragma mark - NSTextViewDelegate (Link Clicks — macOS)
+
+- (BOOL)textView:(NSTextView *)textView clickedOnLink:(id)link atIndex:(NSUInteger)charIndex
+{
+  NSString *urlString = nil;
+  if ([link isKindOfClass:[NSURL class]]) {
+    urlString = [(NSURL *)link absoluteString];
+  } else if ([link isKindOfClass:[NSString class]]) {
+    urlString = (NSString *)link;
+  }
+
+  if (!urlString)
+    return NO;
+
+  // Check custom "linkURL" attribute first
+  NSAttributedString *attrText = ENRMGetAttributedText(textView);
+  if (charIndex < attrText.length) {
+    NSString *customURL = [attrText attribute:@"linkURL" atIndex:charIndex effectiveRange:NULL];
+    if (customURL)
+      urlString = customURL;
+  }
+
+  // Handle anchor links by scrolling natively
+  if ([urlString hasPrefix:@"#"]) {
+    [self scrollToAnchor:urlString];
+  }
+
+  // Emit to JS
+  auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(_eventEmitter);
+  if (eventEmitter) {
+    eventEmitter->onLinkPress({.url = std::string([urlString UTF8String])});
+  }
+
+  return YES;
 }
 #endif
 

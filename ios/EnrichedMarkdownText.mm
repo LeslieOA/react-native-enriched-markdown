@@ -212,6 +212,25 @@ using namespace facebook::react;
     return buildEditMenuForSelection(textView.textStorage, textView.selectedRange, strongSelf->_cachedMarkdown,
                                      strongSelf->_config, @[ baseMenu ]);
   };
+
+  ((ENRMContextMenuTextView *)_textView).linkClickHandler = ^BOOL(NSString *url) {
+    EnrichedMarkdownText *strongSelf = weakSelf;
+    if (!strongSelf)
+      return NO;
+
+    // Handle anchor links by scrolling natively
+    if ([url hasPrefix:@"#"]) {
+      [strongSelf scrollToAnchor:url];
+    }
+
+    // Emit to JS
+    auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(strongSelf->_eventEmitter);
+    if (eventEmitter) {
+      eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
+    }
+
+    return YES; // We handled it
+  };
 #endif
 
   ENRMTapRecognizer *tapRecognizer = [[ENRMTapRecognizer alloc] initWithTarget:self action:@selector(textTapped:)];
@@ -543,6 +562,86 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
   return [super touchEventEmitterAtPoint:point];
 }
 
+/// Convert heading text to a GitHub-style anchor slug:
+/// lowercase, strip non-alphanumeric (except spaces/hyphens), spaces→hyphens
+static NSString *slugifyHeading(NSString *headingText)
+{
+  NSString *lower = [headingText lowercaseString];
+  NSMutableString *slug = [NSMutableString string];
+  for (NSUInteger i = 0; i < lower.length; i++) {
+    unichar c = [lower characterAtIndex:i];
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+      [slug appendFormat:@"%C", c];
+    } else if (c == ' ') {
+      [slug appendString:@"-"];
+    }
+    // strip everything else
+  }
+  return slug;
+}
+
+#if TARGET_OS_OSX
+- (BOOL)scrollToAnchor:(NSString *)fragment
+{
+  if (!_textView || !_scrollContainer)
+    return NO;
+
+  // Strip leading '#'
+  NSString *anchor = fragment;
+  if ([anchor hasPrefix:@"#"]) {
+    anchor = [anchor substringFromIndex:1];
+  }
+  if (anchor.length == 0)
+    return NO;
+
+  NSAttributedString *attrText = ENRMGetAttributedText(_textView);
+  if (!attrText || attrText.length == 0)
+    return NO;
+
+  __block NSRange matchRange = NSMakeRange(NSNotFound, 0);
+
+  [attrText enumerateAttribute:MarkdownTypeAttributeName
+                       inRange:NSMakeRange(0, attrText.length)
+                       options:0
+                    usingBlock:^(id value, NSRange range, BOOL *stop) {
+                      if (![value isKindOfClass:[NSString class]])
+                        return;
+                      NSString *type = (NSString *)value;
+                      if (![type hasPrefix:@"heading-"])
+                        return;
+
+                      NSString *headingText = [[attrText attributedSubstringFromRange:range] string];
+                      headingText = [headingText
+                          stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                      NSString *slug = slugifyHeading(headingText);
+
+                      if ([slug isEqualToString:anchor]) {
+                        matchRange = range;
+                        *stop = YES;
+                      }
+                    }];
+
+  if (matchRange.location == NSNotFound)
+    return NO;
+
+  // Get the glyph rect for the heading and scroll to it
+  NSLayoutManager *layoutManager = _textView.layoutManager;
+  NSTextContainer *textContainer = _textView.textContainer;
+  NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:matchRange actualCharacterRange:NULL];
+  NSRect headingRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
+
+  // Add text container inset offset
+  NSEdgeInsets inset = _textView.textContainerInset;
+  headingRect.origin.x += inset.left;
+  headingRect.origin.y += inset.top;
+
+  [_scrollContainer.contentView scrollToPoint:NSMakePoint(0, headingRect.origin.y)];
+  [_scrollContainer reflectScrolledClipView:_scrollContainer.contentView];
+
+  return YES;
+}
+#endif
+
 - (void)textTapped:(ENRMTapRecognizer *)recognizer
 {
   ENRMPlatformTextView *textView = (ENRMPlatformTextView *)recognizer.view;
@@ -565,6 +664,17 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
 
   NSString *url = linkURLAtTapLocation(textView, recognizer);
   if (url) {
+#if TARGET_OS_OSX
+    // Handle in-document anchor links natively by scrolling to the heading
+    if ([url hasPrefix:@"#"] && [self scrollToAnchor:url]) {
+      // Still emit to JS so the consuming app can track/log it
+      auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
+      if (eventEmitter) {
+        eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
+      }
+      return;
+    }
+#endif
     auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
     if (eventEmitter) {
       eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
@@ -607,6 +717,45 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
           suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0))
 {
   return buildEditMenuForSelection(textView.attributedText, range, _cachedMarkdown, _config, suggestedActions);
+}
+#endif
+
+#if TARGET_OS_OSX
+#pragma mark - NSTextViewDelegate (Link Clicks — macOS)
+
+- (BOOL)textView:(NSTextView *)textView clickedOnLink:(id)link atIndex:(NSUInteger)charIndex
+{
+  // link is either an NSString or NSURL depending on how NSLinkAttributeName was set
+  NSString *urlString = nil;
+  if ([link isKindOfClass:[NSURL class]]) {
+    urlString = [(NSURL *)link absoluteString];
+  } else if ([link isKindOfClass:[NSString class]]) {
+    urlString = (NSString *)link;
+  }
+
+  if (!urlString)
+    return NO;
+
+  // Check custom "linkURL" attribute first (may differ from NSLinkAttributeName value)
+  NSAttributedString *attrText = ENRMGetAttributedText(_textView);
+  if (charIndex < attrText.length) {
+    NSString *customURL = [attrText attribute:@"linkURL" atIndex:charIndex effectiveRange:NULL];
+    if (customURL)
+      urlString = customURL;
+  }
+
+  // Handle anchor links by scrolling natively
+  if ([urlString hasPrefix:@"#"]) {
+    [self scrollToAnchor:urlString];
+  }
+
+  // Emit to JS
+  auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
+  if (eventEmitter) {
+    eventEmitter->onLinkPress({.url = std::string([urlString UTF8String])});
+  }
+
+  return YES; // We handled it — don't let NSTextView open it in browser
 }
 #endif
 
