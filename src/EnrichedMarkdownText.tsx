@@ -111,6 +111,9 @@ interface ImageStyle {
   borderRadius?: number;
   marginTop?: number;
   marginBottom?: number;
+  /** When true, images render at their natural dimensions (clamped to container width).
+   *  When false (default), block images use `height` and inline images use `inlineImage.size`. */
+  responsive?: boolean;
 }
 
 interface InlineImageStyle {
@@ -390,19 +393,50 @@ function stripHtmlComments(md: string): string {
  */
 function replaceInlineHtmlTags(md: string): string {
   return md
+    .replace(/<br\s*\/?>/gi, '  \n')
     .replace(/<mark>([\s\S]*?)<\/mark>/gi, '\uE001$1\uE002')
     .replace(/<sub>([\s\S]*?)<\/sub>/gi, '\uE003$1\uE004')
-    .replace(/<sup>([\s\S]*?)<\/sup>/gi, '\uE005$1\uE006');
+    .replace(/<sup>([\s\S]*?)<\/sup>/gi, '\uE005$1\uE006')
+    .replace(/<u>([\s\S]*?)<\/u>/gi, '\uE007$1\uE008');
+}
+
+/**
+ * Convert <img> HTML tags to markdown image syntax with dimension hints.
+ * Dimensions are encoded in the URL fragment so they survive the markdown parser
+ * without touching the bridge. Fragments are never sent to servers (HTTP spec).
+ *
+ * Example:
+ *   <img alt="Octocat" src="https://example.com/cat.png" width="120" />
+ *   → ![Octocat](https://example.com/cat.png#__enrm_w=120)
+ */
+function replaceImgTags(md: string): string {
+  return md.replace(/<img\s+([^>]*?)\/?>/gi, (_match, attrs: string) => {
+    const src = attrs.match(/src=["']([^"']+)["']/i)?.[1];
+    if (!src) return _match; // no src — leave as-is
+
+    const alt = attrs.match(/alt=["']([^"']*?)["']/i)?.[1] ?? '';
+    const width = attrs.match(/width=["'](\d+)["']/i)?.[1];
+    const height = attrs.match(/height=["'](\d+)["']/i)?.[1];
+
+    // Build fragment with dimension hints
+    const dimParts: string[] = [];
+    if (width) dimParts.push(`__enrm_w=${width}`);
+    if (height) dimParts.push(`__enrm_h=${height}`);
+
+    const fragment = dimParts.length > 0 ? `#${dimParts.join('&')}` : '';
+    return `![${alt}](${src}${fragment})`;
+  });
 }
 
 /**
  * Apply all GFM preprocessing steps: strip HTML comments, convert admonitions,
- * and replace supported inline HTML tags with PUA markers.
+ * replace supported inline HTML tags with PUA markers, and convert <img> tags.
  */
 function preprocessGfm(md: string, labels: Record<string, string>): string {
   const stripped = stripHtmlComments(md);
   const withAdmonitions = preprocessAdmonitions(stripped, labels);
-  return replaceInlineHtmlTags(withAdmonitions);
+  const withInlineHtml = replaceInlineHtmlTags(withAdmonitions);
+  return replaceImgTags(withInlineHtml);
 }
 
 export const EnrichedMarkdownText = ({

@@ -655,6 +655,11 @@ BOOL applyMarkdownStyleToConfig(StyleConfig *config, const MarkdownStyle &newSty
     changed = YES;
   }
 
+  if (newStyle.image.responsive != oldStyle.image.responsive) {
+    [config setImageResponsive:newStyle.image.responsive];
+    changed = YES;
+  }
+
   // ── Inline Image ───────────────────────────────────────────────────────────
 
   if (newStyle.inlineImage.size != oldStyle.inlineImage.size) {

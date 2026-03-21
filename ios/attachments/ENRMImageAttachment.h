@@ -14,6 +14,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) NSString *imageURL;
 @property (nonatomic, readonly) BOOL isInline;
+/// Explicit width from <img> tag (0 = use default sizing)
+@property (nonatomic, readonly) CGFloat explicitWidth;
+/// Explicit height from <img> tag (0 = use default sizing)
+@property (nonatomic, readonly) CGFloat explicitHeight;
+/// When YES, images render at natural dimensions (clamped to container width)
+@property (nonatomic, readonly) BOOL responsive;
 
 + (instancetype)attachmentForURL:(NSString *)imageURL config:(StyleConfig *)config isInline:(BOOL)isInline;
 

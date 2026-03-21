@@ -7,6 +7,8 @@ static const unichar kSubOpen = 0xE003;
 static const unichar kSubClose = 0xE004;
 static const unichar kSupOpen = 0xE005;
 static const unichar kSupClose = 0xE006;
+static const unichar kUOpen = 0xE007;
+static const unichar kUClose = 0xE008;
 
 /// Scale factor for sub/superscript font size relative to the surrounding text
 static const CGFloat kScriptFontScale = 0.75;
@@ -66,8 +68,9 @@ void applyInlineHTMLPostProcessing(NSMutableAttributedString *output)
 
   // Quick check: scan for any PUA characters before doing work
   NSCharacterSet *puaSet = [NSCharacterSet
-      characterSetWithCharactersInString:[NSString stringWithFormat:@"%C%C%C%C%C%C", kMarkOpen, kMarkClose, kSubOpen,
-                                                                    kSubClose, kSupOpen, kSupClose]];
+      characterSetWithCharactersInString:[NSString stringWithFormat:@"%C%C%C%C%C%C%C%C", kMarkOpen, kMarkClose,
+                                                                    kSubOpen, kSubClose, kSupOpen, kSupClose, kUOpen,
+                                                                    kUClose]];
   if ([output.string rangeOfCharacterFromSet:puaSet].location == NSNotFound) {
     return;
   }
@@ -133,5 +136,10 @@ void applyInlineHTMLPostProcessing(NSMutableAttributedString *output)
                                value:@(font.pointSize * kSuperscriptOffset)
                                range:attrRange];
                  }];
+  });
+
+  // <u> → underline
+  processMarkerPair(output, (PUAMarkerPair){kUOpen, kUClose}, ^(NSMutableAttributedString *str, NSRange range) {
+    [str addAttribute:NSUnderlineStyleAttributeName value:@(NSUnderlineStyleSingle) range:range];
   });
 }

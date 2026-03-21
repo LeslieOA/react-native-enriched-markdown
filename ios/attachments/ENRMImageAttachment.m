@@ -25,6 +25,11 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
 @property (nonatomic, assign) BOOL isInline;
 @property (nonatomic, assign) CGFloat cachedHeight;
 @property (nonatomic, assign) CGFloat cachedBorderRadius;
+@property (nonatomic, assign) CGFloat explicitWidth;
+@property (nonatomic, assign) CGFloat explicitHeight;
+@property (nonatomic, assign) BOOL responsive;
+/// Clean URL with __enrm fragment stripped (used for downloading/caching)
+@property (nonatomic, copy) NSString *downloadURL;
 @property (nonatomic, weak) NSTextContainer *textContainer;
 @property (nonatomic, weak) ENRMPlatformTextView *textView;
 @property (nonatomic, strong) RCTUIImage *originalImage;
@@ -66,6 +71,7 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
 
 + (instancetype)attachmentForURL:(NSString *)imageURL config:(StyleConfig *)config isInline:(BOOL)isInline
 {
+  // Use full URL (with fragment) as registry key so different dimensions produce different attachments
   NSString *key = [NSString stringWithFormat:@"%@_%d", imageURL, isInline];
   ENRMImageAttachment *existing = [[self attachmentRegistry] objectForKey:key];
   if (existing && existing.loadedImage) {
@@ -81,14 +87,58 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
   [[self attachmentRegistry] removeAllObjects];
 }
 
+/**
+ * Parse __enrm dimension hints from a URL fragment.
+ * Fragment format: #__enrm_w=120&__enrm_h=80
+ * Returns the clean URL (fragment stripped) via outCleanURL.
+ */
+static void parseEnrmFragment(NSString *url, NSString **outCleanURL, CGFloat *outWidth, CGFloat *outHeight)
+{
+  *outWidth = 0;
+  *outHeight = 0;
+  *outCleanURL = url;
+
+  NSRange hashRange = [url rangeOfString:@"#__enrm_"];
+  if (hashRange.location == NSNotFound)
+    return;
+
+  NSString *fragment = [url substringFromIndex:hashRange.location + 1];
+  *outCleanURL = [url substringToIndex:hashRange.location];
+
+  for (NSString *param in [fragment componentsSeparatedByString:@"&"]) {
+    if ([param hasPrefix:@"__enrm_w="]) {
+      *outWidth = [[param substringFromIndex:9] doubleValue];
+    } else if ([param hasPrefix:@"__enrm_h="]) {
+      *outHeight = [[param substringFromIndex:9] doubleValue];
+    }
+  }
+}
+
 - (instancetype)initWithImageURL:(NSString *)imageURL config:(StyleConfig *)config isInline:(BOOL)isInline
 {
   self = [super init];
   if (self) {
-    _imageURL = imageURL;
-    _isInline = isInline;
+    // Parse dimension hints from URL fragment
+    NSString *cleanURL;
+    CGFloat explicitW, explicitH;
+    parseEnrmFragment(imageURL, &cleanURL, &explicitW, &explicitH);
 
-    _cachedHeight = isInline ? [config inlineImageSize] : [config imageHeight];
+    _imageURL = imageURL;
+    _downloadURL = cleanURL;
+    _isInline = isInline;
+    _explicitWidth = explicitW;
+    _explicitHeight = explicitH;
+    _responsive = [config imageResponsive];
+
+    if (explicitH > 0) {
+      _cachedHeight = explicitH;
+    } else if (explicitW > 0) {
+      // Use explicit width as initial height (square placeholder) until image loads
+      // and we can calculate proper aspect ratio
+      _cachedHeight = explicitW;
+    } else {
+      _cachedHeight = isInline ? [config inlineImageSize] : [config imageHeight];
+    }
     _cachedBorderRadius = [config imageBorderRadius];
 
     [self setupPlaceholder];
@@ -103,7 +153,15 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
                             characterIndex:(NSUInteger)characterIndex
 {
   CGFloat height = self.cachedHeight;
-  CGFloat width = self.isInline ? height : (lineFragment.size.width > 0 ? lineFragment.size.width : height);
+  CGFloat width;
+
+  if (self.isInline) {
+    width = self.explicitWidth > 0 ? self.explicitWidth : height;
+  } else if (self.explicitWidth > 0) {
+    width = self.explicitWidth;
+  } else {
+    width = lineFragment.size.width > 0 ? lineFragment.size.width : height;
+  }
 
   if (self.isInline) {
     UIFont *appliedFont = nil;
@@ -135,7 +193,8 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
 
   if (self.originalImage && imageBounds.size.width > 0) {
     self.bounds = imageBounds;
-    [self processAndApplyImage:self.originalImage withTargetWidth:imageBounds.size.width];
+    CGFloat targetWidth = self.explicitWidth > 0 ? self.explicitWidth : imageBounds.size.width;
+    [self processAndApplyImage:self.originalImage withTargetWidth:targetWidth];
   }
 
   return self.loadedImage ?: self.image;
@@ -147,7 +206,44 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
     return;
 
   self.originalImage = image;
-  CGFloat targetWidth = self.isInline ? self.cachedHeight : self.bounds.size.width;
+
+  if (image.size.width > 0) {
+    CGFloat aspectRatio = image.size.height / image.size.width;
+
+    if (self.explicitWidth > 0 && self.explicitHeight == 0) {
+      // Explicit width without height — derive from aspect ratio
+      self.cachedHeight = round(self.explicitWidth * aspectRatio);
+    } else if (self.explicitWidth == 0 && self.explicitHeight == 0) {
+      // No explicit dimensions
+      if (self.isInline) {
+        if (self.responsive) {
+          // responsive flag: use image's natural dimensions for inline images too
+          self.cachedHeight = image.size.height;
+          self.explicitWidth = image.size.width;
+        }
+        // else: keep at configured inlineImageSize (matches GitHub behaviour)
+      } else {
+        // Block: container width will be used; derive height from aspect ratio
+        CGFloat containerWidth = self.bounds.size.width > 0 ? self.bounds.size.width : image.size.width;
+        // If image is narrower than container, use natural size instead of stretching
+        if (image.size.width < containerWidth) {
+          self.explicitWidth = image.size.width;
+          self.cachedHeight = image.size.height;
+        } else {
+          self.cachedHeight = round(containerWidth * aspectRatio);
+        }
+      }
+    }
+  }
+
+  CGFloat targetWidth;
+  if (self.explicitWidth > 0) {
+    targetWidth = self.explicitWidth;
+  } else if (self.isInline) {
+    targetWidth = self.cachedHeight;
+  } else {
+    targetWidth = self.bounds.size.width;
+  }
 
   // Defer processing if we don't have valid bounds yet (common for non-inline block images)
   if (!self.isInline && targetWidth <= 0) {
@@ -246,11 +342,11 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
 
 - (void)startDownloadingImage
 {
-  if (self.imageURL.length == 0)
+  if (self.downloadURL.length == 0)
     return;
 
   __weak typeof(self) weakSelf = self;
-  [[ENRMImageDownloader shared] downloadURL:self.imageURL
+  [[ENRMImageDownloader shared] downloadURL:self.downloadURL
                                  completion:^(RCTUIImage *image) { [weakSelf handleLoadedImage:image]; }];
 }
 
@@ -263,9 +359,7 @@ static NSMapTable<NSString *, ENRMImageAttachment *> *_attachmentRegistry;
   NSRange range = [self findAttachmentRangeInText:textView.textStorage];
   if (range.location != NSNotFound) {
     [textView.layoutManager invalidateDisplayForCharacterRange:range];
-    if (!self.isInline) {
-      [textView.layoutManager invalidateLayoutForCharacterRange:range actualCharacterRange:NULL];
-    }
+    [textView.layoutManager invalidateLayoutForCharacterRange:range actualCharacterRange:NULL];
   }
 }
 

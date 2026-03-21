@@ -127,6 +127,7 @@ static inline NSString *normalizedFontWeight(NSString *fontWeight)
   CGFloat _imageBorderRadius;
   CGFloat _imageMarginTop;
   CGFloat _imageMarginBottom;
+  BOOL _imageResponsive;
   // Inline image properties
   CGFloat _inlineImageSize;
   // Blockquote properties
@@ -408,6 +409,7 @@ static inline NSString *normalizedFontWeight(NSString *fontWeight)
   copy->_imageBorderRadius = _imageBorderRadius;
   copy->_imageMarginTop = _imageMarginTop;
   copy->_imageMarginBottom = _imageMarginBottom;
+  copy->_imageResponsive = _imageResponsive;
   copy->_inlineImageSize = _inlineImageSize;
   copy->_blockquoteFontSize = _blockquoteFontSize;
   copy->_blockquoteFontFamily = [_blockquoteFontFamily copy];
@@ -1454,6 +1456,16 @@ static inline NSString *normalizedFontWeight(NSString *fontWeight)
 - (void)setImageMarginBottom:(CGFloat)newValue
 {
   _imageMarginBottom = newValue;
+}
+
+- (BOOL)imageResponsive
+{
+  return _imageResponsive;
+}
+
+- (void)setImageNaturalSize:(BOOL)newValue
+{
+  _imageResponsive = newValue;
 }
 
 - (CGFloat)inlineImageSize

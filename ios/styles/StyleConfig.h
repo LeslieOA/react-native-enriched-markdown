@@ -190,6 +190,8 @@
 - (void)setImageMarginTop:(CGFloat)newValue;
 - (CGFloat)imageMarginBottom;
 - (void)setImageMarginBottom:(CGFloat)newValue;
+- (BOOL)imageResponsive;
+- (void)setImageResponsive:(BOOL)newValue;
 // Inline image properties
 - (CGFloat)inlineImageSize;
 - (void)setInlineImageSize:(CGFloat)newValue;

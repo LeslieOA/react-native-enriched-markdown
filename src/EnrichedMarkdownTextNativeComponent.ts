@@ -87,6 +87,7 @@ interface ImageStyleInternal {
   borderRadius: CodegenTypes.Float;
   marginTop: CodegenTypes.Float;
   marginBottom: CodegenTypes.Float;
+  responsive: boolean;
 }
 
 interface InlineImageStyleInternal {
