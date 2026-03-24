@@ -151,6 +151,7 @@ using namespace facebook::react;
   BOOL _enableLinkPreview;
 #if TARGET_OS_OSX
   NSScrollView *_macScrollContainer;
+  NSEdgeInsets _contentInset;
   ENRMFlippedView *_macDocumentView;
 #endif
 }
@@ -226,7 +227,24 @@ using namespace facebook::react;
   if (_segmentViews.count == 0)
     return 0.0;
 
-  __block CGFloat yOffset = 0.0;
+#if TARGET_OS_OSX
+  // Apply content inset via document view padding (not NSScrollView.contentInsets,
+  // which gets reset by internal scroll view state management during anchor scrolls).
+  CGFloat insetTop = _contentInset.top;
+  CGFloat insetLeft = _contentInset.left;
+  CGFloat insetRight = _contentInset.right;
+  CGFloat insetBottom = _contentInset.bottom;
+  CGFloat contentWidth = width - insetLeft - insetRight;
+  if (contentWidth <= 0)
+    contentWidth = width;
+#else
+  CGFloat insetTop = 0;
+  CGFloat insetLeft = 0;
+  CGFloat insetBottom = 0;
+  CGFloat contentWidth = width;
+#endif
+
+  __block CGFloat yOffset = insetTop;
   const NSUInteger lastIndex = _segmentViews.count - 1;
 
   [_segmentViews enumerateObjectsUsingBlock:^(RCTUIView *segment, NSUInteger i, BOOL *stop) {
@@ -238,27 +256,27 @@ using namespace facebook::react;
     if ([segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
       EnrichedMarkdownInternalText *textView = (EnrichedMarkdownInternalText *)segment;
       textView.allowTrailingMargin = shouldAddBottomMargin;
-      segmentHeight = [textView measureHeight:width];
+      segmentHeight = [textView measureHeight:contentWidth];
 
     } else if ([segment isKindOfClass:[TableContainerView class]]) {
       yOffset += _config.tableMarginTop;
-      segmentHeight = [(TableContainerView *)segment measureHeight:width];
+      segmentHeight = [(TableContainerView *)segment measureHeight:contentWidth];
     }
 #if ENRICHED_MARKDOWN_MATH
     else if ([segment isKindOfClass:[ENRMMathContainerView class]]) {
       yOffset += _config.mathMarginTop;
-      segmentHeight = [(ENRMMathContainerView *)segment measureHeight:width];
+      segmentHeight = [(ENRMMathContainerView *)segment measureHeight:contentWidth];
     }
 #endif
 
     if (applyFrames) {
-      CGRect segmentFrame = CGRectMake(0, yOffset, width, segmentHeight);
+      CGRect segmentFrame = CGRectMake(insetLeft, yOffset, contentWidth, segmentHeight);
       segment.frame = segmentFrame;
 #if TARGET_OS_OSX
       if ([segment isKindOfClass:[EnrichedMarkdownInternalText class]]) {
         EnrichedMarkdownInternalText *textSeg = (EnrichedMarkdownInternalText *)segment;
         textSeg.textView.frame = segment.bounds;
-        textSeg.textView.textContainer.size = CGSizeMake(width, CGFLOAT_MAX);
+        textSeg.textView.textContainer.size = CGSizeMake(contentWidth, CGFLOAT_MAX);
         [textSeg.textView.layoutManager ensureLayoutForTextContainer:textSeg.textView.textContainer];
         ENRMSetNeedsDisplay(textSeg.textView);
       }
@@ -277,7 +295,7 @@ using namespace facebook::react;
 #endif
   }];
 
-  return yOffset;
+  return yOffset + insetBottom;
 }
 
 - (CGSize)measureSize:(CGFloat)maxWidth
@@ -661,6 +679,7 @@ using namespace facebook::react;
   CGFloat width = _macScrollContainer.contentSize.width;
   if (width <= 0)
     width = self.bounds.size.width;
+  // computeSegmentLayoutForWidth applies contentInset padding to segments directly
   CGFloat totalHeight = [self computeSegmentLayoutForWidth:width applyFrames:YES];
   _macDocumentView.frame = NSMakeRect(0, 0, width, MAX(totalHeight, self.bounds.size.height));
 #else
@@ -735,11 +754,12 @@ using namespace facebook::react;
 #if TARGET_OS_OSX
   {
     const auto &inset = newViewProps.contentInset;
-    if (inset.top != 0 || inset.right != 0 || inset.bottom != 0 || inset.left != 0) {
-      _macScrollContainer.automaticallyAdjustsContentInsets = NO;
-      _macScrollContainer.contentInsets = NSEdgeInsetsMake(inset.top, inset.left, inset.bottom, inset.right);
-      // Push scroller back to the view edge so it isn't inset with the content
-      _macScrollContainer.scrollerInsets = NSEdgeInsetsMake(-inset.top, -inset.left, -inset.bottom, -inset.right);
+    NSEdgeInsets newInset = NSEdgeInsetsMake(inset.top, inset.left, inset.bottom, inset.right);
+    BOOL insetChanged = (newInset.top != _contentInset.top || newInset.left != _contentInset.left ||
+                         newInset.bottom != _contentInset.bottom || newInset.right != _contentInset.right);
+    _contentInset = newInset;
+    if (insetChanged) {
+      [self setNeedsLayout];
     }
   }
 #endif
@@ -888,10 +908,12 @@ static NSString *slugifyHeadingEM(NSString *headingText)
     NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:matchRange actualCharacterRange:NULL];
     NSRect headingRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
 
-    // Convert to document view coordinates: segment frame origin + heading offset within the text view
+    // Convert to document view coordinates: segment frame origin + heading offset within the text view.
+    // segmentView.frame.origin.y already includes the top inset padding (applied in computeSegmentLayoutForWidth).
+    // Subtract the top inset so the heading sits at the visible top edge, not below the padding.
     CGFloat scrollY = segmentView.frame.origin.y + headingRect.origin.y;
-
-    [_macScrollContainer.contentView scrollToPoint:NSMakePoint(0, scrollY)];
+    CGFloat adjustedY = MAX(0, scrollY - _contentInset.top);
+    [_macScrollContainer.contentView scrollToPoint:NSMakePoint(0, adjustedY)];
     [_macScrollContainer reflectScrolledClipView:_macScrollContainer.contentView];
 
     return YES;
