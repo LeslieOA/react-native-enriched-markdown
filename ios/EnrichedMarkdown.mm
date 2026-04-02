@@ -852,12 +852,8 @@ static NSString *slugifyHeadingEM(NSString *headingText)
   return slug;
 }
 
-#if TARGET_OS_OSX
 - (BOOL)scrollToAnchor:(NSString *)fragment
 {
-  if (!_macScrollContainer || !_macDocumentView)
-    return NO;
-
   NSString *anchor = fragment;
   if ([anchor hasPrefix:@"#"]) {
     anchor = [anchor substringFromIndex:1];
@@ -906,7 +902,11 @@ static NSString *slugifyHeadingEM(NSString *headingText)
     NSLayoutManager *layoutManager = textView.layoutManager;
     NSTextContainer *textContainer = textView.textContainer;
     NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:matchRange actualCharacterRange:NULL];
-    NSRect headingRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
+    CGRect headingRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
+
+#if TARGET_OS_OSX
+    if (!_macScrollContainer || !_macDocumentView)
+      return NO;
 
     // Convert to document view coordinates: segment frame origin + heading offset within the text view.
     // segmentView.frame.origin.y already includes the top inset padding (applied in computeSegmentLayoutForWidth).
@@ -915,13 +915,34 @@ static NSString *slugifyHeadingEM(NSString *headingText)
     CGFloat adjustedY = MAX(0, scrollY - _contentInset.top);
     [_macScrollContainer.contentView scrollToPoint:NSMakePoint(0, adjustedY)];
     [_macScrollContainer reflectScrolledClipView:_macScrollContainer.contentView];
+#else
+    // On iOS, walk up the view hierarchy to find the parent UIScrollView
+    // (typically a React Native ScrollView) and scroll it to the heading.
+    CGFloat targetY = segmentView.frame.origin.y + headingRect.origin.y;
+
+    UIScrollView *parentScroll = nil;
+    UIView *current = self.superview;
+    while (current) {
+      if ([current isKindOfClass:[UIScrollView class]]) {
+        parentScroll = (UIScrollView *)current;
+        break;
+      }
+      current = current.superview;
+    }
+    if (!parentScroll)
+      return NO;
+
+    CGPoint pointInScroll = [self convertPoint:CGPointMake(0, targetY) toView:parentScroll];
+    CGFloat maxOffsetY = parentScroll.contentSize.height - parentScroll.bounds.size.height;
+    CGFloat clampedY = MIN(pointInScroll.y, MAX(maxOffsetY, 0));
+    [parentScroll setContentOffset:CGPointMake(0, clampedY) animated:YES];
+#endif
 
     return YES;
   }
 
   return NO;
 }
-#endif
 
 - (void)textTapped:(ENRMTapRecognizer *)recognizer
 {
@@ -945,7 +966,6 @@ static NSString *slugifyHeadingEM(NSString *headingText)
 
   NSString *url = linkURLAtTapLocation(textView, recognizer);
   if (url) {
-#if TARGET_OS_OSX
     if ([url hasPrefix:@"#"] && [self scrollToAnchor:url]) {
       auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(_eventEmitter);
       if (eventEmitter) {
@@ -953,7 +973,6 @@ static NSString *slugifyHeadingEM(NSString *headingText)
       }
       return;
     }
-#endif
     auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(_eventEmitter);
     if (eventEmitter) {
       eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
@@ -978,6 +997,20 @@ static NSString *slugifyHeadingEM(NSString *headingText)
                   inRange:(NSRange)characterRange
               interaction:(UITextItemInteraction)interaction
 {
+  // Intercept anchor links and scroll to the heading instead of opening
+  NSString *urlStr = URL.absoluteString;
+  NSString *fragment = URL.fragment;
+  if (fragment.length > 0 || [urlStr hasPrefix:@"#"]) {
+    NSString *anchor = fragment.length > 0 ? [@"#" stringByAppendingString:fragment] : urlStr;
+    if ([self scrollToAnchor:anchor]) {
+      auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownEventEmitter const>(_eventEmitter);
+      if (eventEmitter) {
+        eventEmitter->onLinkPress({.url = std::string([anchor UTF8String])});
+      }
+      return NO;
+    }
+  }
+
   if (interaction != UITextItemInteractionPresentActions) {
     return YES;
   }
