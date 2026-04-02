@@ -721,6 +721,20 @@ static NSString *slugifyHeading(NSString *headingText)
                   inRange:(NSRange)characterRange
               interaction:(UITextItemInteraction)interaction
 {
+  // Intercept anchor links and scroll to the heading instead of opening
+  NSString *urlStr = URL.absoluteString;
+  NSString *fragment = URL.fragment;
+  if (fragment.length > 0 || [urlStr hasPrefix:@"#"]) {
+    NSString *anchor = fragment.length > 0 ? [@"#" stringByAppendingString:fragment] : urlStr;
+    if ([self scrollToAnchor:anchor]) {
+      auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
+      if (eventEmitter) {
+        eventEmitter->onLinkPress({.url = std::string([anchor UTF8String])});
+      }
+      return NO;
+    }
+  }
+
   if (interaction != UITextItemInteractionPresentActions) {
     return YES;
   }
