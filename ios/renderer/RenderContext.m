@@ -113,6 +113,7 @@
     if (NSMaxRange(range) > length)
       continue;
     [attributedString addAttribute:@"linkURL" value:self.linkURLs[i] range:range];
+    [attributedString addAttribute:NSLinkAttributeName value:self.linkURLs[i] range:range];
   }
 }
 
@@ -166,7 +167,7 @@
              fontSize:(CGFloat)fontSize
            fontFamily:(NSString *)fontFamily
            fontWeight:(NSString *)fontWeight
-                color:(UIColor *)color
+                color:(RCTUIColor *)color
          headingLevel:(NSInteger)headingLevel
 {
   _currentBlockType = type;
@@ -175,24 +176,24 @@
   _currentBlockStyle.fontSize = fontSize;
   _currentBlockStyle.fontFamily = fontFamily ?: @"";
   _currentBlockStyle.fontWeight = fontWeight ?: @"normal";
-  _currentBlockStyle.color = color ?: [UIColor blackColor];
+  _currentBlockStyle.color = color ?: [RCTUIColor blackColor];
 }
 
 - (void)setBlockStyle:(BlockType)type
              fontSize:(CGFloat)fontSize
            fontFamily:(NSString *)fontFamily
            fontWeight:(NSString *)fontWeight
-                color:(UIColor *)color
+                color:(RCTUIColor *)color
 {
   [self setBlockStyle:type fontSize:fontSize fontFamily:fontFamily fontWeight:fontWeight color:color headingLevel:0];
 }
 
-- (void)setBlockStyle:(BlockType)type font:(UIFont *)font color:(UIColor *)color headingLevel:(NSInteger)headingLevel
+- (void)setBlockStyle:(BlockType)type font:(UIFont *)font color:(RCTUIColor *)color headingLevel:(NSInteger)headingLevel
 {
   _currentBlockType = type;
   _currentHeadingLevel = headingLevel;
 
-  UIColor *finalColor = color ?: [UIColor blackColor];
+  RCTUIColor *finalColor = color ?: [RCTUIColor blackColor];
   _currentBlockStyle.cachedFont = font;
   _currentBlockStyle.color = finalColor;
 
@@ -222,7 +223,7 @@
   if (!font) {
     font = [self cachedFontForSize:style.fontSize family:style.fontFamily weight:style.fontWeight];
   }
-  UIColor *color = style.color ?: [UIColor blackColor];
+  RCTUIColor *color = style.color ?: [RCTUIColor blackColor];
 
   // Cache for future calls within same block
   style.cachedTextAttributes = @{NSFontAttributeName : font, NSForegroundColorAttributeName : color};
@@ -264,7 +265,7 @@
   _currentBlockStyle.fontSize = 0;
   _currentBlockStyle.fontFamily = @"";
   _currentBlockStyle.fontWeight = @"";
-  _currentBlockStyle.color = [UIColor blackColor];
+  _currentBlockStyle.color = [RCTUIColor blackColor];
 }
 
 #pragma mark - Static Utilities
@@ -280,7 +281,7 @@
 /**
  * Calculates whether a strong color should override the block color.
  */
-+ (UIColor *)calculateStrongColor:(UIColor *)configStrongColor blockColor:(UIColor *)blockColor
++ (RCTUIColor *)calculateStrongColor:(RCTUIColor *)configStrongColor blockColor:(RCTUIColor *)blockColor
 {
   if (!configStrongColor || [configStrongColor isEqual:blockColor]) {
     return blockColor;
@@ -305,7 +306,7 @@
 + (void)applyFontAndColorAttributes:(NSMutableAttributedString *)output
                               range:(NSRange)range
                                font:(UIFont *)font
-                              color:(UIColor *)color
+                              color:(RCTUIColor *)color
                  existingAttributes:(NSDictionary *)attrs
                shouldPreserveColors:(BOOL)shouldPreserve
 {

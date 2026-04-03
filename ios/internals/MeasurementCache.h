@@ -113,7 +113,7 @@ template <typename StyleStruct> inline size_t computeStyleFingerprint(const Styl
   hashFields(s.link.fontFamily, s.strong.fontFamily, s.strong.fontWeight, s.em.fontFamily, s.em.fontStyle);
 
   // Visual/Spacing Elements
-  hashFields(s.image.height, s.image.marginTop, s.image.marginBottom);
+  hashFields(s.image.height, s.image.marginTop, s.image.marginBottom, s.image.responsive);
   hashFields(s.inlineImage.size);
   hashFields(s.thematicBreak.height, s.thematicBreak.marginTop, s.thematicBreak.marginBottom);
 

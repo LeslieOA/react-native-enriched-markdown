@@ -2,13 +2,16 @@
 #import "AccessibilityInfo.h"
 #import "AttributedRenderer.h"
 #import "CodeBlockBackground.h"
+#import "ENRMContextMenuTextView+macOS.h"
 #import "ENRMImageAttachment.h"
 #import "ENRMMarkdownParser.h"
 #import "ENRMTailFadeInAnimator.h"
+#import "ENRMUIKit.h"
 #import "EditMenuUtils.h"
 #import "FontScaleObserver.h"
 #import "FontUtils.h"
 #import "HeightUpdateUtils.h"
+#import "InlineHTMLPostProcessor.h"
 #import "LastElementUtils.h"
 #import "LinkTapUtils.h"
 #import "MarkdownASTNode.h"
@@ -40,12 +43,15 @@ using namespace facebook::react;
 - (void)setupTextView;
 - (void)renderMarkdownContent:(NSString *)markdownString;
 - (void)applyRenderedText:(NSMutableAttributedString *)attributedText;
-- (void)textTapped:(UITapGestureRecognizer *)recognizer;
+- (void)textTapped:(ENRMTapRecognizer *)recognizer;
 - (void)setupLayoutManager;
 @end
 
 @implementation EnrichedMarkdownText {
-  UITextView *_textView;
+  ENRMPlatformTextView *_textView;
+#if TARGET_OS_OSX
+  NSScrollView *_scrollContainer;
+#endif
   ENRMMarkdownParser *_parser;
   NSString *_cachedMarkdown;
   NSString *_renderedMarkdown;
@@ -71,7 +77,11 @@ using namespace facebook::react;
   ENRMTailFadeInAnimator *_fadeAnimator;
 
   AccessibilityInfo *_accessibilityInfo;
+#if !TARGET_OS_OSX
   NSMutableArray<UIAccessibilityElement *> *_accessibilityElements;
+#else
+  NSMutableArray *_accessibilityElements;
+#endif
   BOOL _accessibilityNeedsRebuild;
 }
 
@@ -84,27 +94,20 @@ using namespace facebook::react;
 
 - (CGSize)measureSize:(CGFloat)maxWidth
 {
-  NSAttributedString *text = _textView.attributedText;
-  CGFloat defaultHeight = [UIFont systemFontOfSize:16.0].lineHeight;
+  NSAttributedString *text = ENRMGetAttributedText(_textView);
+  CGFloat defaultHeight = UIFontLineHeight([UIFont systemFontOfSize:16.0]);
 
   if (text.length == 0) {
     return CGSizeMake(maxWidth, defaultHeight);
   }
 
-  // Use UITextView's layout manager for measurement to avoid
-  // boundingRectWithSize: height discrepancies with NSTextAttachment objects.
-  _textView.textContainer.size = CGSizeMake(maxWidth, CGFLOAT_MAX);
-  [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
-  CGRect usedRect = [_textView.layoutManager usedRectForTextContainer:_textView.textContainer];
+  ENRMTextLayoutResult layout = ENRMMeasureTextLayout(_textView, maxWidth);
 
-  CGFloat measuredWidth = usedRect.size.width;
-  CGFloat measuredHeight = usedRect.size.height;
+  CGFloat measuredWidth = layout.usedRect.size.width;
+  CGFloat measuredHeight = layout.usedRect.size.height;
 
-  // When text ends with \n (e.g. code block's bottom padding spacer),
-  // TextKit creates an "extra line fragment" after it that adds unwanted height.
-  CGRect extraFragment = _textView.layoutManager.extraLineFragmentRect;
-  if (!CGRectIsEmpty(extraFragment)) {
-    measuredHeight -= extraFragment.size.height;
+  if (!CGRectIsEmpty(layout.extraLineFragmentRect)) {
+    measuredHeight -= layout.extraLineFragmentRect.size.height;
   }
 
   // Code block's bottom padding is a spacer \n with minimumLineHeight = codeBlockPadding.
@@ -118,7 +121,7 @@ using namespace facebook::react;
   }
 
   // Round to pixel boundaries to match React Native's <Text> measurement
-  CGFloat scale = [UIScreen mainScreen].scale;
+  CGFloat scale = RCTScreenScale();
   return CGSizeMake(ceil(measuredWidth * scale) / scale, ceil(measuredHeight * scale) / scale);
 }
 
@@ -154,7 +157,7 @@ using namespace facebook::react;
     static const auto defaultProps = std::make_shared<const EnrichedMarkdownTextProps>();
     _props = defaultProps;
 
-    self.backgroundColor = [UIColor clearColor];
+    self.backgroundColor = [RCTUIColor clearColor];
     _parser = [[ENRMMarkdownParser alloc] init];
     _md4cFlags = [ENRMMd4cFlags defaultFlags];
 
@@ -187,34 +190,71 @@ using namespace facebook::react;
 
 - (void)setupTextView
 {
-  _textView = [[UITextView alloc] init];
+#if !TARGET_OS_OSX
+  _textView = [[ENRMPlatformTextView alloc] init];
   _textView.text = @"";
-  _textView.font = [UIFont systemFontOfSize:16.0];
-  _textView.backgroundColor = [UIColor clearColor];
-  _textView.textColor = [UIColor blackColor];
-  _textView.editable = NO;
+#else
+  _textView = [[ENRMContextMenuTextView alloc] init];
+  _textView.string = @"";
+#endif
+  ENRMConfigureMarkdownTextView(_textView);
   _textView.delegate = self;
-  _textView.scrollEnabled = NO;
-  _textView.showsVerticalScrollIndicator = NO;
-  _textView.showsHorizontalScrollIndicator = NO;
-  _textView.textContainerInset = UIEdgeInsetsZero;
-  _textView.textContainer.lineFragmentPadding = 0;
-  // Disable UITextView's default link styling - we handle it directly in attributed strings
-  _textView.linkTextAttributes = @{};
-  _textView.selectable = YES;
-  // Prevent flash before content is rendered
   _textView.hidden = YES;
-  // We provide custom accessibility elements with proper traits
-  _textView.accessibilityElementsHidden = YES;
 
-  UITapGestureRecognizer *tapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self
-                                                                                  action:@selector(textTapped:)];
+#if TARGET_OS_OSX
+  __weak EnrichedMarkdownText *weakSelf = self;
+  ((ENRMContextMenuTextView *)_textView).contextMenuProvider =
+      ^NSMenu *_Nullable(NSMenu *baseMenu, NSTextView *textView)
+  {
+    EnrichedMarkdownText *strongSelf = weakSelf;
+    if (!strongSelf) {
+      return baseMenu;
+    }
+    return buildEditMenuForSelection(textView.textStorage, textView.selectedRange, strongSelf->_cachedMarkdown,
+                                     strongSelf->_config, @[ baseMenu ]);
+  };
+
+  ((ENRMContextMenuTextView *)_textView).linkClickHandler = ^BOOL(NSString *url) {
+    EnrichedMarkdownText *strongSelf = weakSelf;
+    if (!strongSelf)
+      return NO;
+
+    // Handle anchor links by scrolling natively
+    if ([url hasPrefix:@"#"]) {
+      [strongSelf scrollToAnchor:url];
+    }
+
+    // Emit to JS
+    auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(strongSelf->_eventEmitter);
+    if (eventEmitter) {
+      eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
+    }
+
+    return YES; // We handled it
+  };
+#endif
+
+  ENRMTapRecognizer *tapRecognizer = [[ENRMTapRecognizer alloc] initWithTarget:self action:@selector(textTapped:)];
   [_textView addGestureRecognizer:tapRecognizer];
 
+#if TARGET_OS_OSX
+  // Wrap text view in NSScrollView for native macOS scrolling.
+  // Fabric's layout system doesn't re-measure after YGNodeMarkDirty on macOS,
+  // so the component stays viewport-sized. The NSScrollView handles overflow.
+  _scrollContainer = [[NSScrollView alloc] initWithFrame:self.bounds];
+  _scrollContainer.hasVerticalScroller = YES;
+  _scrollContainer.hasHorizontalScroller = NO;
+  _scrollContainer.drawsBackground = NO;
+  _scrollContainer.backgroundColor = [NSColor clearColor];
+  _scrollContainer.contentView.drawsBackground = NO;
+  _scrollContainer.documentView = _textView;
+  self.contentView = _scrollContainer;
+#else
   self.contentView = _textView;
+#endif
 }
 
-- (void)didAddSubview:(UIView *)subview
+- (void)didAddSubview:(RCTUIView *)subview
 {
   [super didAddSubview:subview];
 
@@ -223,7 +263,7 @@ using namespace facebook::react;
   }
 }
 
-- (void)willRemoveSubview:(UIView *)subview
+- (void)willRemoveSubview:(RCTUIView *)subview
 {
   if (subview == _textView && _textView.layoutManager != nil) {
     NSLayoutManager *layoutManager = _textView.layoutManager;
@@ -282,6 +322,7 @@ using namespace facebook::react;
     context.maxFontSizeMultiplier = maxFontSizeMultiplier;
     context.writingDirection = writingDirection;
     NSMutableAttributedString *attributedText = [renderer renderRoot:ast context:context];
+    applyInlineHTMLPostProcessing(attributedText);
 
     CGFloat lastElementMarginBottom = [renderer getLastElementMarginBottom];
 
@@ -316,6 +357,7 @@ using namespace facebook::react;
   context.maxFontSizeMultiplier = _maxFontSizeMultiplier;
   context.writingDirection = currentWritingDirection();
   NSMutableAttributedString *attributedText = [renderer renderRoot:ast context:context];
+  applyInlineHTMLPostProcessing(attributedText);
 
   _lastElementMarginBottom = [renderer getLastElementMarginBottom];
 
@@ -377,15 +419,13 @@ using namespace facebook::react;
   // that corrupts the height sent to Yoga.
   if (self.bounds.size.width > 0) {
     [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
-    [_textView layoutIfNeeded];
-
-    [_textView setNeedsDisplay];
+    ENRMSetNeedsDisplay(_textView);
+#if !TARGET_OS_OSX
     [self setNeedsLayout];
+#endif
 
     CGSize measured = [self measureSize:self.bounds.size.width];
-    BOOL needsUpdate = needsHeightUpdate(measured, self.bounds);
-
-    if (needsUpdate) {
+    if (needsHeightUpdate(measured, self.bounds)) {
       [self requestHeightUpdate];
     }
   }
@@ -477,7 +517,7 @@ using namespace facebook::react;
   if (newViewProps.streamingAnimation != oldViewProps.streamingAnimation) {
     _streamingAnimation = newViewProps.streamingAnimation;
     if (_streamingAnimation) {
-      _previousTextLength = _textView.attributedText.length;
+      _previousTextLength = ENRMGetAttributedText(_textView).length;
     } else {
       [_fadeAnimator cancel];
       _fadeAnimator = nil;
@@ -499,24 +539,10 @@ using namespace facebook::react;
 
   if (self.window && _renderedMarkdown != nil) {
     _textView.hidden = NO;
-    _textView.contentOffset = CGPointZero;
-
-    _textView.frame = self.bounds;
-    _textView.textContainer.size = CGSizeMake(self.bounds.size.width, CGFLOAT_MAX);
-
-    NSAttributedString *text = _textView.attributedText;
-    if (text.length > 0) {
-      [_textView.layoutManager invalidateLayoutForCharacterRange:NSMakeRange(0, text.length) actualCharacterRange:NULL];
-      [_textView.layoutManager ensureLayoutForTextContainer:_textView.textContainer];
-    }
-
-    [_textView layoutIfNeeded];
-    [_textView setNeedsDisplay];
+    ENRMRefreshTextViewAfterWindowAttach(_textView, self.bounds);
 
     CGSize measured = [self measureSize:self.bounds.size.width];
-    BOOL needsUpdate = needsHeightUpdate(measured, self.bounds);
-
-    if (needsUpdate) {
+    if (needsHeightUpdate(measured, self.bounds)) {
       [self requestHeightUpdate];
     }
   }
@@ -539,9 +565,89 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
   return [super touchEventEmitterAtPoint:point];
 }
 
-- (void)textTapped:(UITapGestureRecognizer *)recognizer
+/// Convert heading text to a GitHub-style anchor slug:
+/// lowercase, strip non-alphanumeric (except spaces/hyphens), spaces→hyphens
+static NSString *slugifyHeading(NSString *headingText)
 {
-  UITextView *textView = (UITextView *)recognizer.view;
+  NSString *lower = [headingText lowercaseString];
+  NSMutableString *slug = [NSMutableString string];
+  for (NSUInteger i = 0; i < lower.length; i++) {
+    unichar c = [lower characterAtIndex:i];
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_') {
+      [slug appendFormat:@"%C", c];
+    } else if (c == ' ') {
+      [slug appendString:@"-"];
+    }
+    // strip everything else
+  }
+  return slug;
+}
+
+#if TARGET_OS_OSX
+- (BOOL)scrollToAnchor:(NSString *)fragment
+{
+  if (!_textView || !_scrollContainer)
+    return NO;
+
+  // Strip leading '#'
+  NSString *anchor = fragment;
+  if ([anchor hasPrefix:@"#"]) {
+    anchor = [anchor substringFromIndex:1];
+  }
+  if (anchor.length == 0)
+    return NO;
+
+  NSAttributedString *attrText = ENRMGetAttributedText(_textView);
+  if (!attrText || attrText.length == 0)
+    return NO;
+
+  __block NSRange matchRange = NSMakeRange(NSNotFound, 0);
+
+  [attrText enumerateAttribute:MarkdownTypeAttributeName
+                       inRange:NSMakeRange(0, attrText.length)
+                       options:0
+                    usingBlock:^(id value, NSRange range, BOOL *stop) {
+                      if (![value isKindOfClass:[NSString class]])
+                        return;
+                      NSString *type = (NSString *)value;
+                      if (![type hasPrefix:@"heading-"])
+                        return;
+
+                      NSString *headingText = [[attrText attributedSubstringFromRange:range] string];
+                      headingText = [headingText
+                          stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                      NSString *slug = slugifyHeading(headingText);
+
+                      if ([slug isEqualToString:anchor]) {
+                        matchRange = range;
+                        *stop = YES;
+                      }
+                    }];
+
+  if (matchRange.location == NSNotFound)
+    return NO;
+
+  // Get the glyph rect for the heading and scroll to it
+  NSLayoutManager *layoutManager = _textView.layoutManager;
+  NSTextContainer *textContainer = _textView.textContainer;
+  NSRange glyphRange = [layoutManager glyphRangeForCharacterRange:matchRange actualCharacterRange:NULL];
+  NSRect headingRect = [layoutManager boundingRectForGlyphRange:glyphRange inTextContainer:textContainer];
+
+  // Add text container inset offset
+  NSEdgeInsets inset = _textView.textContainerInset;
+  headingRect.origin.x += inset.left;
+  headingRect.origin.y += inset.top;
+
+  [_scrollContainer.contentView scrollToPoint:NSMakePoint(0, headingRect.origin.y)];
+  [_scrollContainer reflectScrolledClipView:_scrollContainer.contentView];
+
+  return YES;
+}
+#endif
+
+- (void)textTapped:(ENRMTapRecognizer *)recognizer
+{
+  ENRMPlatformTextView *textView = (ENRMPlatformTextView *)recognizer.view;
 
   if (handleTaskListTapWithSharedLogic(
           textView, recognizer, &self->_cachedMarkdown, self->_config,
@@ -561,6 +667,17 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
 
   NSString *url = linkURLAtTapLocation(textView, recognizer);
   if (url) {
+#if TARGET_OS_OSX
+    // Handle in-document anchor links natively by scrolling to the heading
+    if ([url hasPrefix:@"#"] && [self scrollToAnchor:url]) {
+      // Still emit to JS so the consuming app can track/log it
+      auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
+      if (eventEmitter) {
+        eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
+      }
+      return;
+    }
+#endif
     auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
     if (eventEmitter) {
       eventEmitter->onLinkPress({.url = std::string([url UTF8String])});
@@ -568,15 +685,13 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
     return;
   }
 
-  // Tapping on non-interactive area: dismiss any active text selection
-  if (textView.selectedTextRange != nil) {
-    textView.selectedTextRange = nil;
-  }
+  ENRMClearSelection(textView);
 }
 
 #pragma mark - UITextViewDelegate (Link Interaction)
 
-- (BOOL)textView:(UITextView *)textView
+#if !TARGET_OS_OSX
+- (BOOL)textView:(ENRMPlatformTextView *)textView
     shouldInteractWithURL:(NSURL *)URL
                   inRange:(NSRange)characterRange
               interaction:(UITextItemInteraction)interaction
@@ -600,12 +715,52 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
 
 #pragma mark - UITextViewDelegate (Edit Menu)
 
-- (UIMenu *)textView:(UITextView *)textView
+- (UIMenu *)textView:(ENRMPlatformTextView *)textView
     editMenuForTextInRange:(NSRange)range
           suggestedActions:(NSArray<UIMenuElement *> *)suggestedActions API_AVAILABLE(ios(16.0))
 {
   return buildEditMenuForSelection(textView.attributedText, range, _cachedMarkdown, _config, suggestedActions);
 }
+#endif
+
+#if TARGET_OS_OSX
+#pragma mark - NSTextViewDelegate (Link Clicks — macOS)
+
+- (BOOL)textView:(NSTextView *)textView clickedOnLink:(id)link atIndex:(NSUInteger)charIndex
+{
+  // link is either an NSString or NSURL depending on how NSLinkAttributeName was set
+  NSString *urlString = nil;
+  if ([link isKindOfClass:[NSURL class]]) {
+    urlString = [(NSURL *)link absoluteString];
+  } else if ([link isKindOfClass:[NSString class]]) {
+    urlString = (NSString *)link;
+  }
+
+  if (!urlString)
+    return NO;
+
+  // Check custom "linkURL" attribute first (may differ from NSLinkAttributeName value)
+  NSAttributedString *attrText = ENRMGetAttributedText(_textView);
+  if (charIndex < attrText.length) {
+    NSString *customURL = [attrText attribute:@"linkURL" atIndex:charIndex effectiveRange:NULL];
+    if (customURL)
+      urlString = customURL;
+  }
+
+  // Handle anchor links by scrolling natively
+  if ([urlString hasPrefix:@"#"]) {
+    [self scrollToAnchor:urlString];
+  }
+
+  // Emit to JS
+  auto eventEmitter = std::static_pointer_cast<EnrichedMarkdownTextEventEmitter const>(_eventEmitter);
+  if (eventEmitter) {
+    eventEmitter->onLinkPress({.url = std::string([urlString UTF8String])});
+  }
+
+  return YES; // We handled it — don't let NSTextView open it in browser
+}
+#endif
 
 #pragma mark - Accessibility (VoiceOver Navigation)
 
@@ -615,9 +770,13 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
     return;
   }
   _accessibilityNeedsRebuild = NO;
+#if !TARGET_OS_OSX
   _accessibilityElements = [MarkdownAccessibilityElementBuilder buildElementsForTextView:_textView
                                                                                     info:_accessibilityInfo
                                                                                container:self];
+#else
+  _accessibilityElements = [NSMutableArray array];
+#endif
 }
 
 - (BOOL)isAccessibilityElement
@@ -652,10 +811,12 @@ Class<RCTComponentViewProtocol> EnrichedMarkdownTextCls(void)
   return _accessibilityElements;
 }
 
+#if !TARGET_OS_OSX
 - (NSArray<UIAccessibilityCustomRotor *> *)accessibilityCustomRotors
 {
   [self rebuildAccessibilityElementsIfNeeded];
   return [MarkdownAccessibilityElementBuilder buildRotorsFromElements:_accessibilityElements];
 }
+#endif
 
 @end

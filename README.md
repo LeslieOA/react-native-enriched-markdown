@@ -1,5 +1,7 @@
 <img src="https://github.com/user-attachments/assets/27d269ca-4004-423f-b90a-745edadd7307" alt="react-native-enriched-markdown by Software Mansion" width="100%">
 
+> **Experimental fork** — This is a personal development fork of [`react-native-enriched-markdown`](https://github.com/software-mansion-labs/react-native-enriched-markdown) by Software Mansion. It is **not** a replacement or alternative library. Features developed here (GFM anchor scrolling, admonition styling, etc.) are intended to be contributed back upstream once stabilised. For production use, please use the [official library](https://github.com/software-mansion-labs/react-native-enriched-markdown).
+
 # react-native-enriched-markdown
 
 `react-native-enriched-markdown` is a powerful React Native library that renders Markdown content as native text:
@@ -10,13 +12,13 @@
 - 📊 GitHub Flavored Markdown (GFM)
 - 🧮 LaTeX math rendering (block `$$...$$` with `flavor="github"`, inline `$...$` in all flavors)
 - 🎨 Fully customizable styles for all elements
-- 📱 iOS and Android support
+- 📱 iOS, Android, and macOS support
 - 🏛 Supports only the New Architecture (Fabric)
 - ✨ Text selection and copy support
 - 🔗 Interactive link handling
 - 🖼️ Native image interactions (iOS: Copy, Save to Camera Roll)
 - 🌐 Native platform features (Translate, Look Up, Search Web, Share)
-- 🗣️ Accessibility support (VoiceOver & TalkBack)
+- 🗣️ Accessibility support (VoiceOver on iOS, TalkBack on Android)
 - 🔄 Full RTL (right-to-left) support including text, lists, blockquotes, tables, and task lists
 
 Since 2012 [Software Mansion](https://swmansion.com) is a software agency with experience in building web and mobile apps. We are Core React Native Contributors and experts in dealing with all kinds of React Native issues.
@@ -36,14 +38,17 @@ We can help you build your next dream product –
 - [RTL Support](#rtl-support)
 - [Customizing Styles](#customizing-styles)
 - [API Reference](#api-reference)
+- [macOS Support](docs/MACOS.md)
 - [Contributing](#contributing)
 - [Future Plans](#future-plans)
 - [License](#license)
 
 ## Prerequisites
 
-- `react-native-enriched-markdown` currently supports only Android and iOS platforms
-- It works only with [the React Native New Architecture (Fabric)](https://reactnative.dev/architecture/landing-page) and supports following React Native releases: `0.81`, `0.82`, `0.83` and `0.84`
+- Supports iOS, Android, and macOS platforms
+- Requires [the React Native New Architecture (Fabric)](https://reactnative.dev/architecture/landing-page)
+- Supported React Native releases: `0.81`, `0.82`, `0.83`, and `0.84`
+- macOS support via [react-native-macos](https://github.com/microsoft/react-native-macos) `0.81+`
 
 ## Installation
 
@@ -64,12 +69,16 @@ yarn add react-native-enriched-markdown
 >
 > Nightly versions are published to npm automatically and may contain breaking changes.
 
-#### 2. Install iOS dependencies
+#### 2. Install iOS / macOS dependencies
 
 The library includes native code so you will need to re-build the native app.
 
 ```sh
+# iOS
 cd ios && bundle install && bundle exec pod install
+
+# macOS (react-native-macos)
+cd macos && bundle install && bundle exec pod install
 ```
 
 ### Expo app
@@ -208,12 +217,17 @@ When text is selected, `react-native-enriched-markdown` provides enhanced copy f
 
 See the [API Reference](docs/API_REFERENCE.md) for a detailed overview of all the props, methods, and events available.
 
+## macOS Support
+
+`react-native-enriched-markdown` supports macOS via [react-native-macos](https://github.com/microsoft/react-native-macos). See [macOS Support](docs/MACOS.md) for details on macOS-specific features, known limitations, and the example app.
+
 ## Future Plans
 
 We're actively working on expanding the capabilities of `react-native-enriched-markdown`. Here's what's on the roadmap:
 
 - `EnrichedMarkdownInput`
 - Web implementation via `react-native-web`
+- macOS: block math rendering, VoiceOver accessibility, tail fade-in animation
 
 ## Contributing
 

@@ -143,7 +143,13 @@ const DEFAULT_NORMALIZED_STYLE: MarkdownStyleInternal = Object.freeze({
     backgroundColor: normalizeColor('#FDF2F4')!,
     borderColor: normalizeColor('#F8D7DA')!,
   },
-  image: { height: 200, borderRadius: 8, marginTop: 0, marginBottom: 16 },
+  image: {
+    height: 200,
+    borderRadius: 8,
+    marginTop: 0,
+    marginBottom: 16,
+    responsive: false,
+  },
   inlineImage: { size: 20 },
   thematicBreak: {
     color: normalizeColor('#E5E7EB')!,

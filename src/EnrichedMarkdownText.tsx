@@ -111,6 +111,9 @@ interface ImageStyle {
   borderRadius?: number;
   marginTop?: number;
   marginBottom?: number;
+  /** When true, images render at their natural dimensions (clamped to container width).
+   *  When false (default), block images use `height` and inline images use `inlineImage.size`. */
+  responsive?: boolean;
 }
 
 interface InlineImageStyle {
@@ -209,17 +212,16 @@ export interface Md4cFlags {
   latexMath?: boolean;
 }
 
-export interface EnrichedMarkdownTextProps
-  extends Omit<
-    NativeProps,
-    | 'markdownStyle'
-    | 'style'
-    | 'onLinkPress'
-    | 'onLinkLongPress'
-    | 'onTaskListItemPress'
-    | 'md4cFlags'
-    | 'enableLinkPreview'
-  > {
+export interface EnrichedMarkdownTextProps extends Omit<
+  NativeProps,
+  | 'markdownStyle'
+  | 'style'
+  | 'onLinkPress'
+  | 'onLinkLongPress'
+  | 'onTaskListItemPress'
+  | 'md4cFlags'
+  | 'enableLinkPreview'
+> {
   /**
    * Style configuration for markdown elements
    */
@@ -305,12 +307,150 @@ export interface EnrichedMarkdownTextProps
    * @default false
    */
   streamingAnimation?: boolean;
+  /**
+   * Custom display labels for GitHub admonition callouts.
+   * Override the default English labels for localisation or branding.
+   * Only applies when `flavor="github"`.
+   *
+   * @example
+   * // Spanish labels
+   * admonitionLabels={{ NOTE: 'Nota', TIP: 'Consejo', WARNING: 'Advertencia' }}
+   *
+   * @default { NOTE: 'Note', TIP: 'Tip', IMPORTANT: 'Important', WARNING: 'Warning', CAUTION: 'Caution' }
+   */
+  admonitionLabels?: Partial<
+    Record<'NOTE' | 'TIP' | 'IMPORTANT' | 'WARNING' | 'CAUTION', string>
+  >;
+  /**
+   * Content insets for the scroll view (macOS only).
+   * Pads the content area while keeping the scrollbar flush to the view edge.
+   * Only applies when `flavor="github"` (the scrollable EnrichedMarkdown variant).
+   * Ignored on iOS and for `flavor="commonmark"`.
+   * @platform macos
+   */
+  contentInset?: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+  };
 }
 
 const defaultMd4cFlags: Md4cFlags = {
   underline: false,
   latexMath: true,
 };
+
+const ADMONITION_PATTERN =
+  /^(>\s*)\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*$/gm;
+
+const DEFAULT_ADMONITION_LABELS: Record<string, string> = {
+  NOTE: 'Note',
+  TIP: 'Tip',
+  IMPORTANT: 'Important',
+  WARNING: 'Warning',
+  CAUTION: 'Caution',
+};
+
+/** Maps type keyword to ENRMAdmonitionType enum value (1–5). */
+const ADMONITION_TYPE_INDEX: Record<string, number> = {
+  NOTE: 1,
+  TIP: 2,
+  IMPORTANT: 3,
+  WARNING: 4,
+  CAUTION: 5,
+};
+
+/**
+ * Convert GitHub-style admonitions into labelled blockquotes.
+ * Embeds a zero-width-space type marker (\u200B + digit + \u200B) before the
+ * display label so native detection works regardless of the label's language.
+ *
+ * Input:  `> [!NOTE]\n> Content`
+ * Output: `> **[ZWS]1[ZWS]Note**\n>\n> Content`  (ZWS = U+200B zero-width space)
+ */
+function preprocessAdmonitions(
+  md: string,
+  labels: Record<string, string>
+): string {
+  return md.replace(
+    ADMONITION_PATTERN,
+    (_match, prefix: string, type: string) => {
+      const label = labels[type] ?? DEFAULT_ADMONITION_LABELS[type];
+      const typeIndex = ADMONITION_TYPE_INDEX[type];
+      if (!label || !typeIndex) return _match;
+      // Leading digit (1-5) acts as a type marker for native detection,
+      // which strips it after reading the type.
+      return `${prefix}**${typeIndex}${label}**\n${prefix}`;
+    }
+  );
+}
+
+/** Strip HTML comments (<!-- ... -->) that md4c renders as plain text. */
+const HTML_COMMENT_PATTERN = /<!--[\s\S]*?-->/g;
+
+function stripHtmlComments(md: string): string {
+  return md.replace(HTML_COMMENT_PATTERN, '');
+}
+
+/**
+ * Replace a subset of GFM-supported HTML inline tags with Unicode Private Use
+ * Area markers so they survive md4c parsing (which has MD_FLAG_NOHTML set).
+ * The native side detects these PUA pairs and applies the corresponding
+ * NSAttributedString attributes (background colour, baseline offset, etc.).
+ *
+ * PUA mapping:
+ *   <mark>  → U+E001 / U+E002
+ *   <sub>   → U+E003 / U+E004
+ *   <sup>   → U+E005 / U+E006
+ */
+function replaceInlineHtmlTags(md: string): string {
+  return md
+    .replace(/<br\s*\/?>/gi, '  \n')
+    .replace(/<mark>([\s\S]*?)<\/mark>/gi, '\uE001$1\uE002')
+    .replace(/<sub>([\s\S]*?)<\/sub>/gi, '\uE003$1\uE004')
+    .replace(/<sup>([\s\S]*?)<\/sup>/gi, '\uE005$1\uE006')
+    .replace(/<u>([\s\S]*?)<\/u>/gi, '\uE007$1\uE008');
+}
+
+/**
+ * Convert <img> HTML tags to markdown image syntax with dimension hints.
+ * Dimensions are encoded in the URL fragment so they survive the markdown parser
+ * without touching the bridge. Fragments are never sent to servers (HTTP spec).
+ *
+ * Example:
+ *   <img alt="Octocat" src="https://example.com/cat.png" width="120" />
+ *   → ![Octocat](https://example.com/cat.png#__enrm_w=120)
+ */
+function replaceImgTags(md: string): string {
+  return md.replace(/<img\s+([^>]*?)\/?>/gi, (_match, attrs: string) => {
+    const src = attrs.match(/src=["']([^"']+)["']/i)?.[1];
+    if (!src) return _match; // no src — leave as-is
+
+    const alt = attrs.match(/alt=["']([^"']*?)["']/i)?.[1] ?? '';
+    const width = attrs.match(/width=["'](\d+)["']/i)?.[1];
+    const height = attrs.match(/height=["'](\d+)["']/i)?.[1];
+
+    // Build fragment with dimension hints
+    const dimParts: string[] = [];
+    if (width) dimParts.push(`__enrm_w=${width}`);
+    if (height) dimParts.push(`__enrm_h=${height}`);
+
+    const fragment = dimParts.length > 0 ? `#${dimParts.join('&')}` : '';
+    return `![${alt}](${src}${fragment})`;
+  });
+}
+
+/**
+ * Apply all GFM preprocessing steps: strip HTML comments, convert admonitions,
+ * replace supported inline HTML tags with PUA markers, and convert <img> tags.
+ */
+function preprocessGfm(md: string, labels: Record<string, string>): string {
+  const stripped = stripHtmlComments(md);
+  const withAdmonitions = preprocessAdmonitions(stripped, labels);
+  const withInlineHtml = replaceInlineHtmlTags(withAdmonitions);
+  return replaceImgTags(withInlineHtml);
+}
 
 export const EnrichedMarkdownText = ({
   markdown,
@@ -327,6 +467,8 @@ export const EnrichedMarkdownText = ({
   allowTrailingMargin = false,
   flavor = 'commonmark',
   streamingAnimation = false,
+  admonitionLabels,
+  contentInset,
   ...rest
 }: EnrichedMarkdownTextProps) => {
   const normalizedStyleRef = useRef<MarkdownStyleInternal | null>(null);
@@ -370,8 +512,35 @@ export const EnrichedMarkdownText = ({
     [onTaskListItemPress]
   );
 
+  const mergedAdmonitionLabels = useMemo(
+    () => ({ ...DEFAULT_ADMONITION_LABELS, ...admonitionLabels }),
+    [admonitionLabels]
+  );
+
+  // Preprocess GFM: strip HTML comments and convert admonitions
+  const processedMarkdown = useMemo(
+    () =>
+      flavor === 'github'
+        ? preprocessGfm(markdown, mergedAdmonitionLabels)
+        : markdown,
+    [markdown, flavor, mergedAdmonitionLabels]
+  );
+
+  const normalizedContentInset = useMemo(
+    () =>
+      contentInset
+        ? {
+            top: contentInset.top ?? 0,
+            right: contentInset.right ?? 0,
+            bottom: contentInset.bottom ?? 0,
+            left: contentInset.left ?? 0,
+          }
+        : undefined,
+    [contentInset]
+  );
+
   const sharedProps = {
-    markdown,
+    markdown: processedMarkdown,
     markdownStyle: normalizedStyle,
     onLinkPress: handleLinkPress,
     onLinkLongPress: handleLinkLongPress,
@@ -383,6 +552,7 @@ export const EnrichedMarkdownText = ({
     maxFontSizeMultiplier,
     allowTrailingMargin,
     streamingAnimation,
+    contentInset: normalizedContentInset,
     style: containerStyle,
     ...rest,
   };

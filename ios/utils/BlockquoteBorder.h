@@ -1,11 +1,12 @@
 #pragma once
+#import "ENRMUIKit.h"
 #import "StyleConfig.h"
-#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 extern NSString *const BlockquoteDepthAttributeName;
 extern NSString *const BlockquoteBackgroundColorAttributeName;
+extern NSString *const BlockquoteBorderColorAttributeName;
 
 @interface BlockquoteBorder : NSObject
 
